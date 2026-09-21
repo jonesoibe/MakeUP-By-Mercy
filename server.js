@@ -11,10 +11,57 @@ const PDFDocument = require('pdfkit');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const xss = require('xss');
+const crypto = require('crypto');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ========== PHASE 3: IMPROVED ERROR HANDLING ==========
+
+// Sanitize error messages to prevent information disclosure
+function sanitizeErrorMessage(error, includeDetails = false) {
+  if (!error) return 'Unknown error';
+
+  // In production, hide technical details
+  if (process.env.NODE_ENV === 'production') {
+    // List of safe error messages
+    if (error.message.includes('not found')) return 'Resource not found';
+    if (error.message.includes('validation')) return 'Validation error';
+    if (error.message.includes('authentication')) return 'Authentication failed';
+    if (error.message.includes('unauthorized')) return 'Unauthorized access';
+    if (error.message.includes('duplicate key')) return 'Duplicate entry';
+
+    // Default safe message
+    return 'An error occurred. Please try again later.';
+  }
+
+  // In development, show full message
+  return error.message || 'Unknown error';
+}
+
+// Sanitize error for logging (remove sensitive paths/data)
+function sanitizeErrorForLogging(error) {
+  if (!error) return {};
+
+  let message = error.message || '';
+
+  // Remove file paths
+  message = message.replace(/[A-Za-z]:\\[^\\]*\\[^\\]*/g, '<path>');
+  message = message.replace(/\/[a-z]\/[^\s]*/g, '<path>');
+
+  // Remove URLs
+  message = message.replace(/(https?:\/\/[^\s]+)/g, '<url>');
+
+  // Remove IP addresses
+  message = message.replace(/(\d{1,3}\.){3}\d{1,3}/g, '<ip>');
+
+  return {
+    message: message,
+    code: error.code || 'UNKNOWN'
+  };
+}
 
 // ========== LOGGING SETUP ==========
 const fs = require('fs');
@@ -27,11 +74,20 @@ const logFile = path.join(logsDir, `app-${new Date().toISOString().split('T')[0]
 
 function log(level, message, data = '') {
   const timestamp = new Date().toISOString();
+
+  // Sanitize error data if it's an error object
+  let sanitizedData = data;
+  if (data instanceof Error) {
+    sanitizedData = sanitizeErrorForLogging(data);
+  } else if (typeof data === 'object' && data !== null) {
+    sanitizedData = data;
+  }
+
   const logEntry = {
     timestamp,
     level,
     message,
-    data: data || null
+    data: sanitizedData || null
   };
   const logLine = JSON.stringify(logEntry) + '\n';
   console.log(logLine.trim());
@@ -145,6 +201,14 @@ const bookingLimiter = rateLimit({
 app.use('/api/', globalLimiter);
 
 // ========== SECURITY: SECURITY HEADERS ==========
+// ========== SECURITY: HTTPS ENFORCEMENT ==========
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && req.header('x-forwarded-proto') !== 'https') {
+    return res.redirect(`https://${req.header('host')}${req.url}`);
+  }
+  next();
+});
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -172,6 +236,69 @@ app.use(helmet({
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// ========== PHASE 3: CSRF PROTECTION ==========
+// Generate CSRF token for GET requests (display forms)
+app.use((req, res, next) => {
+  // Generate token if not already in cookie
+  if (!req.cookies._csrf) {
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    res.cookie('_csrf', csrfToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000  // 24 hours
+    });
+    res.locals.csrfToken = csrfToken;
+  } else {
+    res.locals.csrfToken = req.cookies._csrf;
+  }
+  next();
+});
+
+// CSRF token validation middleware (for POST/PATCH/DELETE)
+function validateCSRFToken(req, res, next) {
+  // Skip CSRF validation for GET, HEAD, OPTIONS (safe methods)
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  // Skip CSRF validation for certain API endpoints (they use JWT auth)
+  const skipCSRFPaths = ['/api/admin/login', '/api/bookings'];
+  if (skipCSRFPaths.some(path => req.path.startsWith(path))) {
+    return next();
+  }
+
+  // For other state-changing requests, validate CSRF token
+  const tokenFromHeader = req.headers['x-csrf-token'];
+  const tokenFromBody = req.body && req.body._csrf;
+  const tokenFromCookie = req.cookies._csrf;
+
+  const submittedToken = tokenFromHeader || tokenFromBody;
+
+  if (!submittedToken || !tokenFromCookie) {
+    log('WARN', 'CSRF token missing', { path: req.path, method: req.method });
+    return res.status(403).json({
+      success: false,
+      message: 'CSRF token missing or invalid'
+    });
+  }
+
+  // Validate token matches
+  if (submittedToken !== tokenFromCookie) {
+    log('WARN', 'CSRF token mismatch', { path: req.path, method: req.method });
+    return res.status(403).json({
+      success: false,
+      message: 'CSRF token invalid'
+    });
+  }
+
+  next();
+}
+
+// Apply CSRF validation to protected routes
+app.use('/admin', validateCSRFToken);
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -1426,11 +1553,22 @@ app.listen(PORT, () => {
   log('INFO', `Server listening on http://localhost:${PORT}`);
 });
 
-// Error handling middleware
+// ========== PHASE 3: IMPROVED ERROR HANDLING MIDDLEWARE ==========
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
+  // Log the full error internally (sanitized)
+  log('ERROR', 'Unhandled error', err);
+
+  // Send safe error message to client
+  const statusCode = err.statusCode || err.status || 500;
+  const clientMessage = sanitizeErrorMessage(err, false);
+
+  // Include request ID for tracking (helpful for debugging without exposing internals)
+  const requestId = req.id || crypto.randomBytes(8).toString('hex');
+
+  res.status(statusCode).json({
     success: false,
-    message: 'Internal server error'
+    message: clientMessage,
+    ...(process.env.NODE_ENV !== 'production' && { error: err.message }),
+    ...(requestId && { requestId: requestId })
   });
 });
