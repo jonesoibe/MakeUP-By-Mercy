@@ -134,6 +134,50 @@ const serviceSchema = new mongoose.Schema({
 
 const Service = mongoose.models.Service || mongoose.model('Service', serviceSchema);
 
+// Email Template Schema
+const emailTemplateSchema = new mongoose.Schema({
+  type: { type: String, unique: true, required: true }, // 'confirmation', 'receipt', etc.
+  subject: { type: String, required: true },
+  body: { type: String, required: true },
+  updatedAt: { type: Date, default: Date.now },
+  updatedBy: { type: String, default: '' }
+});
+
+const EmailTemplate = mongoose.models.EmailTemplate || mongoose.model('EmailTemplate', emailTemplateSchema);
+
+// Initialize default email templates
+async function initializeDefaultEmailTemplates() {
+  try {
+    const count = await EmailTemplate.countDocuments();
+    if (count === 0) {
+      await EmailTemplate.insertMany([
+        {
+          type: 'confirmation',
+          subject: 'Your MakeUP By Mercy Booking Confirmed - ID: {bookingNumber}',
+          body: `Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.
+
+Booking Details:
+Booking ID: {bookingNumber}
+Date: {date}
+Service: {service}
+Phone: {phone}
+Country: {country}
+
+We look forward to making you look stunning!`
+        }
+      ]);
+      log('INFO', 'Default email templates initialized');
+    }
+  } catch (err) {
+    log('ERROR', 'Failed to initialize default email templates:', err.message);
+  }
+}
+
+// Initialize on startup
+if (MONGO_URI) {
+  setTimeout(initializeDefaultEmailTemplates, 2500);
+}
+
 // Initialize default services if they don't exist
 async function initializeDefaultServices() {
   try {
@@ -1666,6 +1710,94 @@ app.get('/api/admin/services', verifyAdminToken, async (req, res) => {
   } catch (error) {
     log('ERROR', 'Get admin services error:', error.message);
     res.status(500).json({ success: false, message: 'Error fetching services' });
+  }
+});
+
+// ========== EMAIL TEMPLATE ENDPOINTS ==========
+
+// Get email template (admin)
+app.get('/api/admin/email-templates/:type', verifyAdminToken, async (req, res) => {
+  try {
+    const { type } = req.params;
+
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      if (type === 'confirmation') {
+        return res.json({
+          success: true,
+          template: {
+            type: 'confirmation',
+            subject: 'Your MakeUP By Mercy Booking Confirmed - ID: {bookingNumber}',
+            body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!'
+          }
+        });
+      }
+    }
+
+    const template = await EmailTemplate.findOne({ type });
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Email template not found' });
+    }
+
+    res.json({ success: true, template });
+  } catch (error) {
+    log('ERROR', 'Get email template error:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching email template' });
+  }
+});
+
+// Get all email templates (admin)
+app.get('/api/admin/email-templates', verifyAdminToken, async (req, res) => {
+  try {
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      return res.json({
+        success: true,
+        templates: [{
+          type: 'confirmation',
+          subject: 'Your MakeUP By Mercy Booking Confirmed - ID: {bookingNumber}',
+          body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!'
+        }]
+      });
+    }
+
+    const templates = await EmailTemplate.find({});
+    res.json({ success: true, templates });
+  } catch (error) {
+    log('ERROR', 'Get all email templates error:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching email templates' });
+  }
+});
+
+// Update email template (admin)
+app.patch('/api/admin/email-templates/:type', verifyAdminToken, async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { subject, body } = req.body;
+    const adminUsername = req.user?.username || 'admin';
+
+    // Validate input
+    if (!subject || !body) {
+      return res.status(400).json({ success: false, message: 'Subject and body are required' });
+    }
+
+    if (subject.length > 500 || body.length > 5000) {
+      return res.status(400).json({ success: false, message: 'Subject or body is too long' });
+    }
+
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      return res.json({ success: true, message: 'Email template updated (in-memory)' });
+    }
+
+    const template = await EmailTemplate.findOneAndUpdate(
+      { type },
+      { subject, body, updatedAt: Date.now(), updatedBy: adminUsername },
+      { new: true, upsert: true }
+    );
+
+    log('INFO', `Email template '${type}' updated by ${adminUsername}`);
+    res.json({ success: true, template, message: `Email template '${type}' updated successfully` });
+  } catch (error) {
+    log('ERROR', 'Update email template error:', error.message);
+    res.status(500).json({ success: false, message: 'Error updating email template' });
   }
 });
 

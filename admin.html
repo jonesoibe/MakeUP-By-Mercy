@@ -1025,6 +1025,11 @@ We look forward to making you look stunning!</textarea>
             // Show selected tab
             document.getElementById(tabName + '-tab').classList.add('active');
             event.target.classList.add('active');
+
+            // Load email template when tab is opened
+            if (tabName === 'email-templates') {
+                loadEmailTemplate();
+            }
         }
 
         async function loadDashboardData() {
@@ -1455,15 +1460,75 @@ We look forward to making you look stunning!</textarea>
             }
         }
 
-        function saveEmailTemplate() {
-            showSuccess('Email template saved successfully!');
+        async function saveEmailTemplate() {
+            try {
+                const subject = document.getElementById('confirm-subject').value;
+                const body = document.getElementById('confirm-body').value;
+                const adminToken = localStorage.getItem('adminToken');
+
+                if (!subject || !subject.trim()) {
+                    showSuccess('Email subject cannot be empty!', true);
+                    return;
+                }
+
+                if (!body || !body.trim()) {
+                    showSuccess('Email body cannot be empty!', true);
+                    return;
+                }
+
+                const response = await fetch('/api/admin/email-templates/confirmation', {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + adminToken
+                    },
+                    body: JSON.stringify({ subject, body })
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    showSuccess(`Error saving email template: ${data.message}`, true);
+                    return;
+                }
+
+                showSuccess('✅ Email template saved successfully to database!');
+            } catch (error) {
+                console.error('Error saving email template:', error);
+                showSuccess('Error saving email template!', true);
+            }
         }
 
-        function showSuccess(message) {
+        async function loadEmailTemplate() {
+            try {
+                const adminToken = localStorage.getItem('adminToken');
+                const response = await fetch('/api/admin/email-templates/confirmation', {
+                    headers: {
+                        'Authorization': 'Bearer ' + adminToken
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success && data.template) {
+                    document.getElementById('confirm-subject').value = data.template.subject;
+                    document.getElementById('confirm-body').value = data.template.body;
+                }
+            } catch (error) {
+                console.error('Error loading email template:', error);
+            }
+        }
+
+        function showSuccess(message, isError = false) {
             const successEl = document.getElementById('success-message');
             document.getElementById('success-text').textContent = message;
             successEl.classList.add('show');
-            setTimeout(() => successEl.classList.remove('show'), 3000);
+            if (isError) {
+                successEl.style.backgroundColor = '#e74c3c';
+                successEl.style.color = 'white';
+            } else {
+                successEl.style.backgroundColor = '#27ae60';
+                successEl.style.color = 'white';
+            }
+            setTimeout(() => successEl.classList.remove('show'), 4000);
         }
 
         function adminLogout() {

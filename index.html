@@ -2863,20 +2863,35 @@
         // Load service prices from database
         async function loadServicePrices() {
             try {
-                const response = await fetch(`${API_URL}/services`);
-                const data = await response.json();
+                const url = `${API_URL}/services`;
+                console.log('Loading prices from:', url);
 
-                if (data.success && data.services) {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                console.log('Prices loaded:', data);
+
+                if (data.success && data.services && Array.isArray(data.services)) {
                     data.services.forEach(service => {
-                        servicePrices[service.name] = service.price;
+                        if (service.name && typeof service.price === 'number') {
+                            servicePrices[service.name] = service.price;
+                            console.log(`Updated ${service.name} price to ₦${service.price}`);
+                        }
                     });
 
                     // Update pricing display
                     updatePricingDisplay();
+                } else {
+                    console.warn('Invalid response format:', data);
                 }
             } catch (error) {
                 console.error('Error loading service prices:', error);
-                // Use default prices on error
+                console.log('Using default prices: Bridal ₦25,000, Party ₦15,000, Casual ₦10,000');
+                // Use default prices on error - will be displayed
+                updatePricingDisplay();
             }
         }
 
@@ -2884,21 +2899,36 @@
         function updatePricingDisplay() {
             // Update pricing cards
             const pricingCards = document.querySelectorAll('.pricing-card');
+            console.log('Found pricing cards:', pricingCards.length);
 
-            pricingCards.forEach(card => {
-                const title = card.querySelector('h3').textContent;
+            pricingCards.forEach((card, index) => {
+                const titleElement = card.querySelector('h3');
+                if (!titleElement) {
+                    console.log(`Card ${index}: No h3 found`);
+                    return;
+                }
+
+                const title = titleElement.textContent.trim();
                 let serviceName = '';
 
                 if (title.includes('Bridal')) serviceName = 'bridal';
                 else if (title.includes('Party')) serviceName = 'party';
                 else if (title.includes('Casual')) serviceName = 'casual';
 
+                console.log(`Card ${index}: "${title}" -> "${serviceName}"`);
+
                 if (serviceName && servicePrices[serviceName]) {
                     const priceElement = card.querySelector('.pricing-price');
                     if (priceElement) {
                         const price = servicePrices[serviceName];
+                        const oldText = priceElement.textContent;
                         priceElement.textContent = `₦${price.toLocaleString()}`;
+                        console.log(`Updated price: "${oldText}" -> "₦${price.toLocaleString()}"`);
+                    } else {
+                        console.log(`Card ${index}: No .pricing-price element found`);
                     }
+                } else {
+                    console.log(`Card ${index}: No price data for ${serviceName}`);
                 }
             });
         }
