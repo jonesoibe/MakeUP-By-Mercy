@@ -8,6 +8,9 @@ const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
 const QRCode = require('qrcode');
 const PDFDocument = require('pdfkit');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const xss = require('xss');
 require('dotenv').config();
 
 const app = express();
@@ -110,6 +113,62 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// ========== SECURITY: RATE LIMITING ==========
+// Global rate limiter (applies to all routes)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 1000,                  // 1000 requests per window
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,      // Return RateLimit-* headers
+  legacyHeaders: false,       // Disable X-RateLimit-* headers
+  skip: (req) => process.env.NODE_ENV === 'development'  // Skip in dev
+});
+
+// Strict rate limiter for authentication endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 minutes
+  max: 5,                     // Only 5 login attempts per 15 min
+  skipSuccessfulRequests: true,  // Don't count successful logins
+  message: 'Too many login attempts, please try again after 15 minutes.',
+  skip: (req) => process.env.NODE_ENV === 'development'
+});
+
+// Moderate rate limiter for booking submissions
+const bookingLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,  // 1 hour
+  max: 10,                   // Max 10 bookings per hour per IP
+  message: 'Too many bookings submitted, please try again later.',
+  skip: (req) => process.env.NODE_ENV === 'development'
+});
+
+// Apply global rate limiter to all /api routes
+app.use('/api/', globalLimiter);
+
+// ========== SECURITY: SECURITY HEADERS ==========
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      objectSrc: ["'none'"]
+    }
+  },
+  hsts: {
+    maxAge: 31536000,           // 1 year
+    includeSubDomains: true,
+    preload: true
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  noSniff: true,
+  xssFilter: true,
+  frameguard: { action: 'deny' }
+}));
+
 // Middleware
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -165,7 +224,7 @@ async function sendConfirmationEmail(booking) {
           </div>
 
           <div style="background: white; padding: 30px; border: 1px solid #e0e0e0;">
-            <p style="color: #333; font-size: 16px;">Hi ${booking.name},</p>
+            <p style="color: #333; font-size: 16px;">Hi ${escapeHtml(booking.name)},</p>
 
             <p style="color: #666; line-height: 1.6;">
               Thank you for booking with <strong>MakeUP By Mercy</strong>! We're excited to make you look stunning.
@@ -173,11 +232,11 @@ async function sendConfirmationEmail(booking) {
 
             <div style="background: #f2ebf2; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <h3 style="color: #cc3380; margin-top: 0;">Booking Details</h3>
-              <p style="margin: 10px 0;"><strong>Booking ID:</strong> ${booking.bookingNumber}</p>
-              <p style="margin: 10px 0;"><strong>Name:</strong> ${booking.name}</p>
-              <p style="margin: 10px 0;"><strong>Phone:</strong> ${booking.phone} (${booking.country})</p>
-              <p style="margin: 10px 0;"><strong>Email:</strong> ${booking.email}</p>
-              <p style="margin: 10px 0;"><strong>Service:</strong> ${booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1')}</p>
+              <p style="margin: 10px 0;"><strong>Booking ID:</strong> ${escapeHtml(booking.bookingNumber)}</p>
+              <p style="margin: 10px 0;"><strong>Name:</strong> ${escapeHtml(booking.name)}</p>
+              <p style="margin: 10px 0;"><strong>Phone:</strong> ${escapeHtml(booking.phone)} (${escapeHtml(booking.country)})</p>
+              <p style="margin: 10px 0;"><strong>Email:</strong> ${escapeHtml(booking.email)}</p>
+              <p style="margin: 10px 0;"><strong>Service:</strong> ${escapeHtml(booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1'))}</p>
               <p style="margin: 10px 0;"><strong>Date:</strong> ${new Date(booking.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
 
@@ -237,7 +296,7 @@ async function sendMercyNotification(booking) {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: ownerEmail,
-      subject: `New Booking: ${booking.name} - ${booking.service.toUpperCase()}`,
+      subject: `New Booking: ${escapeHtml(booking.name)} - ${booking.service.toUpperCase()}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #cc3380 0%, #ff69b4 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
@@ -250,11 +309,11 @@ async function sendMercyNotification(booking) {
 
             <div style="background: #f2ebf2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #cc3380;">
               <h3 style="color: #cc3380; margin-top: 0;">Booking Details</h3>
-              <p style="margin: 10px 0;"><strong>Booking ID:</strong> ${booking.bookingNumber}</p>
-              <p style="margin: 10px 0;"><strong>Client Name:</strong> ${booking.name}</p>
-              <p style="margin: 10px 0;"><strong>Client Phone:</strong> ${booking.phone} (${booking.country})</p>
-              <p style="margin: 10px 0;"><strong>Client Email:</strong> ${booking.email}</p>
-              <p style="margin: 10px 0;"><strong>Service Type:</strong> ${booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1')}</p>
+              <p style="margin: 10px 0;"><strong>Booking ID:</strong> ${escapeHtml(booking.bookingNumber)}</p>
+              <p style="margin: 10px 0;"><strong>Client Name:</strong> ${escapeHtml(booking.name)}</p>
+              <p style="margin: 10px 0;"><strong>Client Phone:</strong> ${escapeHtml(booking.phone)} (${escapeHtml(booking.country)})</p>
+              <p style="margin: 10px 0;"><strong>Client Email:</strong> ${escapeHtml(booking.email)}</p>
+              <p style="margin: 10px 0;"><strong>Service Type:</strong> ${escapeHtml(booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1'))}</p>
               <p style="margin: 10px 0;"><strong>Booking Date:</strong> ${new Date(booking.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
               <p style="margin: 10px 0;"><strong>Booked At:</strong> ${new Date(booking.bookedAt).toLocaleString()}</p>
             </div>
@@ -328,90 +387,35 @@ app.get('/api/bookings', async (req, res) => {
   }
 });
 
-// POST new booking
-app.post('/api/bookings', async (req, res) => {
+// POST new booking (with rate limiting)
+app.post('/api/bookings', bookingLimiter, async (req, res) => {
   try {
+    // ========== COMPREHENSIVE VALIDATION ==========
+    const { isValid, errors } = validateBookingInput(req.body);
+    if (!isValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors
+      });
+    }
+
     const { name, email, phone, country, service, date } = req.body;
-
-    // ========== VALIDATION CHECKS ==========
-    if (!name || !email || !phone || !service || !date) {
-      return res.status(400).json({
-        success: false,
-        message: 'All fields are required'
-      });
-    }
-
-    if (name.trim().length < 2) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please enter a valid name'
-      });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid email format'
-      });
-    }
-
-    if (phone.trim().length < 7) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please enter a valid phone number'
-      });
-    }
-
-    const validServices = ['bridal', 'party', 'casual'];
-    if (!validServices.includes(service)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid service selected'
-      });
-    }
-
-    const bookingDate = new Date(date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    bookingDate.setHours(0, 0, 0, 0);
-
-    if (isNaN(bookingDate.getTime())) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid date format'
-      });
-    }
-
-    if (bookingDate < today) {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking date cannot be in the past. Please select a future date.'
-      });
-    }
-
-    const maxDate = new Date(today);
-    maxDate.setFullYear(maxDate.getFullYear() + 1);
-    if (bookingDate > maxDate) {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking date cannot be more than 1 year in the future'
-      });
-    }
 
     // Create booking object with sequential booking number
     bookingCounter++;
     const bookingNumber = `MKP-${String(bookingCounter).padStart(5, '0')}`; // MKP-01001, MKP-01002, etc.
 
+    // Sanitize inputs to prevent XSS
     const booking = {
       id: Date.now(),
       bookingNumber: bookingNumber,
-      name: name.trim(),
+      name: sanitizeInput(name.trim()),
       email: email.toLowerCase().trim(),
       phone: phone.trim(),
-      country: country || 'Nigeria',
-      service,
-      date,
+      country: sanitizeInput(country) || 'Nigeria',
+      service: sanitizeInput(service),
+      date: date,
       bookedAt: new Date().toISOString(),
       status: 'confirmed'
     };
@@ -532,7 +536,30 @@ app.delete('/api/bookings/:id', async (req, res) => {
   }
 });
 
-// ========== SECURITY: INPUT VALIDATION ==========
+// ========== SECURITY: INPUT VALIDATION & SANITIZATION ==========
+
+// HTML escape function to prevent XSS
+function escapeHtml(text) {
+  if (!text) return '';
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+
+// Sanitize user input using xss library
+function sanitizeInput(input) {
+  if (typeof input !== 'string') return input;
+  return xss(input, {
+    whiteList: {},  // No HTML tags allowed
+    stripIgnoredTag: true
+  });
+}
+
 // Validate booking number format to prevent NoSQL injection
 function validateBookingNumber(bookingNumber) {
   if (typeof bookingNumber !== 'string') {
@@ -543,6 +570,92 @@ function validateBookingNumber(bookingNumber) {
     throw new Error('Invalid booking number format');
   }
   return bookingNumber;
+}
+
+// Comprehensive input validation for bookings
+function validateBookingInput(input) {
+  const errors = [];
+
+  // Name validation
+  if (!input.name || typeof input.name !== 'string') {
+    errors.push('Name is required');
+  } else {
+    const name = input.name.trim();
+    if (name.length < 2 || name.length > 100) {
+      errors.push('Name must be 2-100 characters');
+    }
+    // Only allow letters, spaces, hyphens, apostrophes
+    if (!/^[a-zA-Z\s\-']+$/.test(name)) {
+      errors.push('Name contains invalid characters');
+    }
+  }
+
+  // Email validation
+  if (!input.email || typeof input.email !== 'string') {
+    errors.push('Email is required');
+  } else {
+    const email = input.email.toLowerCase().trim();
+    if (email.length > 254) {
+      errors.push('Email is too long');
+    }
+    // RFC 5322 simplified regex
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      errors.push('Invalid email format');
+    }
+    // Check for header injection
+    if (email.includes('\n') || email.includes('\r')) {
+      errors.push('Email contains invalid characters');
+    }
+  }
+
+  // Phone validation
+  if (!input.phone || typeof input.phone !== 'string') {
+    errors.push('Phone is required');
+  } else {
+    const phoneClean = input.phone.replace(/[\s\-\+\(\)]/g, '');
+    if (!/^\d{7,15}$/.test(phoneClean)) {
+      errors.push('Phone must be 7-15 digits');
+    }
+  }
+
+  // Service validation
+  if (!input.service || !['bridal', 'party', 'casual'].includes(input.service)) {
+    errors.push('Invalid service selected');
+  }
+
+  // Date validation
+  if (!input.date) {
+    errors.push('Date is required');
+  } else {
+    const bookingDate = new Date(input.date);
+    if (isNaN(bookingDate.getTime())) {
+      errors.push('Invalid date format');
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    bookingDate.setHours(0, 0, 0, 0);
+
+    if (bookingDate < today) {
+      errors.push('Booking date cannot be in the past');
+    }
+
+    const maxDate = new Date(today);
+    maxDate.setFullYear(maxDate.getFullYear() + 1);
+    if (bookingDate > maxDate) {
+      errors.push('Booking date cannot be more than 1 year in the future');
+    }
+  }
+
+  // Country validation (optional whitelist)
+  if (input.country && typeof input.country === 'string') {
+    if (input.country.trim().length > 50) {
+      errors.push('Country name is too long');
+    }
+  }
+
+  return { isValid: errors.length === 0, errors };
 }
 
 // ========== ADMIN SCHEMA & AUTHENTICATION ==========
@@ -649,8 +762,8 @@ function requireRole(...roles) {
 
 // ========== ADMIN API ENDPOINTS ==========
 
-// Admin Login
-app.post('/api/admin/login', async (req, res) => {
+// Admin Login (with rate limiting)
+app.post('/api/admin/login', authLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     log('INFO', `Admin login attempt: ${username}`);
@@ -1135,16 +1248,25 @@ app.post('/api/admin/bookings/:id/contact', verifyAdminToken, async (req, res) =
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
+    // Validate message length
+    if (!message || typeof message !== 'string' || message.length === 0 || message.length > 5000) {
+      return res.status(400).json({ success: false, message: 'Message must be between 1 and 5000 characters' });
+    }
+
+    // Sanitize subject and message to prevent XSS
+    const sanitizedSubject = escapeHtml(subject || `Update regarding your booking ${booking.bookingNumber}`);
+    const sanitizedMessage = escapeHtml(message);
+
     // Send email to customer
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: booking.email,
-      subject: subject || `Update regarding your booking ${booking.bookingNumber}`,
+      subject: sanitizedSubject,
       html: `
-        <h2>Hello ${booking.name},</h2>
-        <p>${message}</p>
-        <p><strong>Booking ID:</strong> ${booking.bookingNumber}</p>
-        <p><strong>Service:</strong> ${booking.service}</p>
+        <h2>Hello ${escapeHtml(booking.name)},</h2>
+        <p>${sanitizedMessage}</p>
+        <p><strong>Booking ID:</strong> ${escapeHtml(booking.bookingNumber)}</p>
+        <p><strong>Service:</strong> ${escapeHtml(booking.service)}</p>
         <p><strong>Date:</strong> ${new Date(booking.date).toLocaleDateString()}</p>
         <p>Best regards,<br>MakeUP By Mercy</p>
       `

@@ -18,13 +18,16 @@
     "express": "^4.18.2",
     "cors": "^2.8.5",
     "body-parser": "^1.20.2",
-    "nodemailer": "^6.9.3",
-    "dotenv": "^16.0.3",
-    "mongoose": "^7.0.0",
+    "nodemailer": "^6.9.7",
+    "dotenv": "^16.3.1",
+    "mongoose": "^7.5.0",
     "qrcode": "^1.5.3",
     "pdfkit": "^0.13.0",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.0"
+    "jsonwebtoken": "^9.1.0",
+    "express-rate-limit": "^7.1.0",
+    "helmet": "^7.0.0",
+    "xss": "^1.0.14"
   }
 }
 

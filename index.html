@@ -2908,7 +2908,7 @@
         // Check server connection when page loads
         document.addEventListener('DOMContentLoaded', checkServer);
 
-        // Show confirmation modal
+        // Show confirmation modal (XSS FIXED - using textContent instead of innerHTML)
         function showConfirmationModal(booking) {
             const modal = document.getElementById('confirmationModal');
             const bookingNumberEl = document.getElementById('bookingNumber');
@@ -2924,13 +2924,25 @@
                 day: 'numeric'
             });
 
-            confirmationDetailsEl.innerHTML = `
-                <p><span class="confirmation-label">Name:</span> ${booking.name}</p>
-                <p><span class="confirmation-label">Phone:</span> ${booking.phone} (${booking.country})</p>
-                <p><span class="confirmation-label">Email:</span> ${booking.email}</p>
-                <p><span class="confirmation-label">Service:</span> ${serviceDisplay}</p>
-                <p><span class="confirmation-label">Date:</span> ${bookingDate}</p>
-            `;
+            // SECURITY FIX: Use textContent and DOM methods instead of innerHTML to prevent XSS
+            confirmationDetailsEl.innerHTML = '';  // Clear existing content
+
+            // Helper function to create label-value pairs safely
+            function createDetailItem(label, value) {
+                const p = document.createElement('p');
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'confirmation-label';
+                labelSpan.textContent = label;  // Safe - textContent, not innerHTML
+                p.appendChild(labelSpan);
+                p.appendChild(document.createTextNode(': ' + value));  // Safe - textContent
+                return p;
+            }
+
+            confirmationDetailsEl.appendChild(createDetailItem('Name', booking.name));
+            confirmationDetailsEl.appendChild(createDetailItem('Phone', booking.phone + ' (' + booking.country + ')'));
+            confirmationDetailsEl.appendChild(createDetailItem('Email', booking.email));
+            confirmationDetailsEl.appendChild(createDetailItem('Service', serviceDisplay));
+            confirmationDetailsEl.appendChild(createDetailItem('Date', bookingDate));
 
             modal.classList.add('show');
         }
@@ -2966,7 +2978,7 @@
             document.body.removeChild(link);
         }
 
-        // Download Receipt as Image (QR Code)
+        // Download Receipt as Image (QR Code) (XSS FIXED - sanitized innerHTML usage)
         function downloadReceiptImage() {
             if (!currentBooking || !currentBooking.bookingNumber) {
                 alert('No booking data available');
@@ -2978,9 +2990,24 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.success && data.qrCode) {
-                        // Display QR code in modal
+                        // SECURITY FIX: Validate QR code is actually a data URL before using
+                        if (!data.qrCode.startsWith('data:image')) {
+                            console.error('Invalid QR code format');
+                            alert('Invalid QR code received');
+                            return;
+                        }
+
+                        // Display QR code in modal using safe DOM methods
                         const qrContainer = document.getElementById('qrCodeDisplay');
-                        qrContainer.innerHTML = `<img src="${data.qrCode}" alt="QR Code" style="width: 150px; height: 150px;">`;
+                        qrContainer.innerHTML = '';  // Clear existing
+
+                        const img = document.createElement('img');
+                        img.src = data.qrCode;
+                        img.alt = 'QR Code';
+                        img.style.width = '150px';
+                        img.style.height = '150px';
+                        qrContainer.appendChild(img);
+
                         document.getElementById('qrCodeContainer').style.display = 'block';
 
                         // Download QR code image
