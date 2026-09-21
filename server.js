@@ -85,8 +85,32 @@ transporter.verify((error, success) => {
   }
 });
 
+// ========== SECURITY: CORS WHITELIST ==========
+const allowedOrigins = [
+  'https://makeup-mercy.com',
+  'https://www.makeup-mercy.com',
+  'https://app.makeup-mercy.com',
+  'http://localhost:3000',     // Dev only
+  'http://localhost:5173',     // Dev (Vite) only
+  'http://127.0.0.1:3000'      // Dev only
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);  // Allow non-browser requests
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      log('WARN', `CORS blocked from origin: ${origin}`);
+      callback(new Error('CORS policy: origin not allowed'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 // Middleware
-app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -508,8 +532,31 @@ app.delete('/api/bookings/:id', async (req, res) => {
   }
 });
 
+// ========== SECURITY: INPUT VALIDATION ==========
+// Validate booking number format to prevent NoSQL injection
+function validateBookingNumber(bookingNumber) {
+  if (typeof bookingNumber !== 'string') {
+    throw new Error('Invalid booking number type');
+  }
+  // Booking numbers must match format: MKP-00001 (3 letters + dash + 5 digits)
+  if (!/^MKP-\d{5}$/.test(bookingNumber)) {
+    throw new Error('Invalid booking number format');
+  }
+  return bookingNumber;
+}
+
 // ========== ADMIN SCHEMA & AUTHENTICATION ==========
-const JWT_SECRET = process.env.JWT_SECRET || 'makeup-mercy-secret-key-change-in-production';
+// Use strong random secret from environment, or generate one
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  const crypto = require('crypto');
+  const secret = crypto.randomBytes(32).toString('hex');
+  log('WARN', 'JWT_SECRET not set in environment. Generated random secret for this session.');
+  log('WARN', 'For production, set JWT_SECRET environment variable to persist across restarts.');
+  if (process.env.NODE_ENV === 'production') {
+    log('ERROR', 'CRITICAL: JWT_SECRET must be set in production environment!');
+  }
+  return secret;
+})();
 
 // Admin User Schema
 const adminSchema = new mongoose.Schema({
@@ -530,15 +577,41 @@ async function initializeDefaultAdmin() {
     if (MONGO_URI && mongoose.connection.readyState === 1) {
       const existingAdmin = await Admin.findOne({ username: 'admin' });
       if (!existingAdmin) {
-        const hashedPassword = await bcryptjs.hash('admin123', 10);
+        // SECURITY FIX: Use strong random password instead of hardcoded 'admin123'
+        const crypto = require('crypto');
+
+        // Check if initial password is provided via environment (for automated setup)
+        let initialPassword = process.env.INITIAL_ADMIN_PASSWORD;
+        let isDefaultSetup = false;
+
+        if (!initialPassword) {
+          // For production: require manual password setup
+          if (process.env.NODE_ENV === 'production') {
+            log('WARN', 'INITIAL_ADMIN_PASSWORD not set. Skipping admin creation. Set via environment variable.');
+            return;
+          }
+
+          // For development: generate temporary password
+          initialPassword = crypto.randomBytes(12).toString('hex');
+          isDefaultSetup = true;
+        }
+
+        const hashedPassword = await bcryptjs.hash(initialPassword, 10);
         await Admin.create({
           username: 'admin',
           email: process.env.OWNER_EMAIL || 'admin@makeup-mercy.com',
           password: hashedPassword,
           role: 'admin',
-          active: true
+          active: true,
+          passwordChangeRequired: isDefaultSetup
         });
-        log('INFO', 'Default admin user created');
+
+        if (isDefaultSetup) {
+          log('WARN', `Default admin user created with temporary password: ${initialPassword}`);
+          log('WARN', 'SECURITY: Change this password immediately after first login!');
+        } else {
+          log('INFO', 'Default admin user created with provided password');
+        }
       }
     }
   } catch (error) {
@@ -960,16 +1033,25 @@ async function generateReceiptPDF(booking) {
 
 // ========== NEW RECEIPT & MANAGEMENT ENDPOINTS ==========
 
-// Download Receipt as PDF
-app.get('/api/bookings/:id/receipt/pdf', async (req, res) => {
+// Download Receipt as PDF (Admin only - SECURITY FIX: Added authentication)
+app.get('/api/bookings/:id/receipt/pdf', verifyAdminToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // SECURITY FIX: Validate booking number format to prevent NoSQL injection
+    let bookingNumber;
+    try {
+      bookingNumber = validateBookingNumber(id);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
+    }
+
     let booking = null;
 
     if (MONGO_URI && mongoose.connection.readyState === 1) {
-      booking = await Booking.findOne({ bookingNumber: id });
+      booking = await Booking.findOne({ bookingNumber });
     } else {
-      booking = bookings.find(b => b.bookingNumber === id);
+      booking = bookings.find(b => b.bookingNumber === bookingNumber);
     }
 
     if (!booking) {
@@ -990,16 +1072,25 @@ app.get('/api/bookings/:id/receipt/pdf', async (req, res) => {
   }
 });
 
-// Download Receipt as Image (PNG with booking details)
-app.get('/api/bookings/:id/receipt/image', async (req, res) => {
+// Download Receipt as Image (PNG with booking details) (Admin only - SECURITY FIX: Added authentication)
+app.get('/api/bookings/:id/receipt/image', verifyAdminToken, async (req, res) => {
   try {
     const { id } = req.params;
+
+    // SECURITY FIX: Validate booking number format to prevent NoSQL injection
+    let bookingNumber;
+    try {
+      bookingNumber = validateBookingNumber(id);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
+    }
+
     let booking = null;
 
     if (MONGO_URI && mongoose.connection.readyState === 1) {
-      booking = await Booking.findOne({ bookingNumber: id });
+      booking = await Booking.findOne({ bookingNumber });
     } else {
-      booking = bookings.find(b => b.bookingNumber === id);
+      booking = bookings.find(b => b.bookingNumber === bookingNumber);
     }
 
     if (!booking) {
@@ -1025,11 +1116,19 @@ app.post('/api/admin/bookings/:id/contact', verifyAdminToken, async (req, res) =
     const { id } = req.params;
     const { subject, message } = req.body;
 
+    // SECURITY FIX: Validate booking number format to prevent NoSQL injection
+    let bookingNumber;
+    try {
+      bookingNumber = validateBookingNumber(id);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
+    }
+
     let booking = null;
     if (MONGO_URI && mongoose.connection.readyState === 1) {
-      booking = await Booking.findOne({ bookingNumber: id });
+      booking = await Booking.findOne({ bookingNumber });
     } else {
-      booking = bookings.find(b => b.bookingNumber === id);
+      booking = bookings.find(b => b.bookingNumber === bookingNumber);
     }
 
     if (!booking) {
@@ -1065,6 +1164,14 @@ app.patch('/api/admin/bookings/:id/status', verifyAdminToken, async (req, res) =
     const { id } = req.params;
     const { status } = req.body;
 
+    // SECURITY FIX: Validate booking number format to prevent NoSQL injection
+    let bookingNumber;
+    try {
+      bookingNumber = validateBookingNumber(id);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
+    }
+
     const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ success: false, message: 'Invalid status' });
@@ -1073,12 +1180,12 @@ app.patch('/api/admin/bookings/:id/status', verifyAdminToken, async (req, res) =
     let booking = null;
     if (MONGO_URI && mongoose.connection.readyState === 1) {
       booking = await Booking.findOneAndUpdate(
-        { bookingNumber: id },
+        { bookingNumber },
         { status, updatedAt: new Date() },
         { new: true }
       );
     } else {
-      booking = bookings.find(b => b.bookingNumber === id);
+      booking = bookings.find(b => b.bookingNumber === bookingNumber);
       if (booking) booking.status = status;
     }
 
