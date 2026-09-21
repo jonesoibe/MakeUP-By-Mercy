@@ -1835,8 +1835,17 @@ app.patch('/api/admin/email-templates/:type', verifyAdminToken, async (req, res)
 
 // Initialize default admin on startup
 mongoose.connection.once('connected', () => {
-  initializeDefaultAdmin();
+  setTimeout(() => {
+    initializeDefaultAdmin();
+  }, 1000);
 });
+
+// Also try to initialize admin immediately when server starts
+setTimeout(() => {
+  if (MONGO_URI && mongoose.connection.readyState === 1) {
+    initializeDefaultAdmin();
+  }
+}, 2000);
 
 // Serve index.html for root path
 app.get('/', (req, res) => {
