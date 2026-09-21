@@ -4,6 +4,10 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const nodemailer = require('nodemailer');
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const bcryptjs = require('bcryptjs');
+const QRCode = require('qrcode');
+const PDFDocument = require('pdfkit');
 require('dotenv').config();
 
 const app = express();
@@ -504,14 +508,45 @@ app.delete('/api/bookings/:id', async (req, res) => {
   }
 });
 
-// ========== ADMIN AUTHENTICATION ==========
-const ADMIN_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123'
-};
+// ========== ADMIN SCHEMA & AUTHENTICATION ==========
+const JWT_SECRET = process.env.JWT_SECRET || 'makeup-mercy-secret-key-change-in-production';
 
-const adminTokens = new Set();
+// Admin User Schema
+const adminSchema = new mongoose.Schema({
+  username: { type: String, unique: true, required: true },
+  email: { type: String, unique: true, required: true },
+  password: { type: String, required: true },
+  role: { type: String, enum: ['admin', 'manager', 'viewer'], default: 'manager' },
+  createdAt: { type: Date, default: Date.now },
+  lastLogin: { type: Date },
+  active: { type: Boolean, default: true }
+});
 
+const Admin = mongoose.model('Admin', adminSchema);
+
+// Initialize default admin (only if not exists)
+async function initializeDefaultAdmin() {
+  try {
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      const existingAdmin = await Admin.findOne({ username: 'admin' });
+      if (!existingAdmin) {
+        const hashedPassword = await bcryptjs.hash('admin123', 10);
+        await Admin.create({
+          username: 'admin',
+          email: process.env.OWNER_EMAIL || 'admin@makeup-mercy.com',
+          password: hashedPassword,
+          role: 'admin',
+          active: true
+        });
+        log('INFO', 'Default admin user created');
+      }
+    }
+  } catch (error) {
+    log('ERROR', 'Error initializing default admin:', error.message);
+  }
+}
+
+// Verify JWT Token
 function verifyAdminToken(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -519,30 +554,78 @@ function verifyAdminToken(req, res, next) {
   }
 
   const token = authHeader.substring(7);
-  if (!adminTokens.has(token)) {
-    return res.status(401).json({ success: false, message: 'Invalid token' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.admin = decoded;
+    next();
+  } catch (error) {
+    log('WARN', 'Invalid token attempt:', error.message);
+    res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
+}
 
-  next();
+// Role-Based Access Control
+function requireRole(...roles) {
+  return (req, res, next) => {
+    if (!req.admin || !roles.includes(req.admin.role)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+    next();
+  };
 }
 
 // ========== ADMIN API ENDPOINTS ==========
 
 // Admin Login
-app.post('/api/admin/login', (req, res) => {
-  const { username, password } = req.body;
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    log('INFO', `Admin login attempt: ${username}`);
 
-  log('INFO', `Admin login attempt: ${username}`);
+    let admin = null;
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      admin = await Admin.findOne({ username, active: true });
+    } else {
+      // Fallback for development without MongoDB
+      if (username === 'admin' && password === 'admin123') {
+        admin = { username: 'admin', role: 'admin', email: 'admin@makeup-mercy.com' };
+      }
+    }
 
-  if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
-    const token = require('crypto').randomBytes(32).toString('hex');
-    adminTokens.add(token);
+    if (!admin) {
+      log('WARN', `Failed admin login attempt: ${username}`);
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    // Verify password
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      const isPasswordValid = await bcryptjs.compare(password, admin.password);
+      if (!isPasswordValid) {
+        log('WARN', `Failed admin login attempt: ${username}`);
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      }
+    } else if (admin.username !== 'admin' || password !== 'admin123') {
+      log('WARN', `Failed admin login attempt: ${username}`);
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    // Generate JWT Token
+    const token = jwt.sign(
+      { id: admin._id || 'demo', username: admin.username, role: admin.role, email: admin.email },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Update last login
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      await Admin.findByIdAndUpdate(admin._id, { lastLogin: new Date() });
+    }
 
     log('SUCCESS', `Admin logged in: ${username}`);
-    res.json({ success: true, token });
-  } else {
-    log('WARN', `Failed admin login attempt: ${username}`);
-    res.status(401).json({ success: false, message: 'Invalid credentials' });
+    res.json({ success: true, token, username: admin.username, role: admin.role });
+  } catch (error) {
+    log('ERROR', 'Login error:', error.message);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
@@ -807,6 +890,301 @@ app.get('/admin-login', (req, res) => {
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'Server is running' });
+});
+
+// ========== RECEIPT GENERATION FUNCTIONS ==========
+
+// Generate QR Code
+async function generateQRCode(data) {
+  try {
+    return await QRCode.toDataURL(data);
+  } catch (error) {
+    log('ERROR', 'QR code generation error:', error.message);
+    return null;
+  }
+}
+
+// Generate Receipt as Base64
+async function generateReceiptPDF(booking) {
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      let buffers = [];
+
+      doc.on('data', (data) => buffers.push(data));
+      doc.on('end', () => {
+        const pdf = Buffer.concat(buffers);
+        resolve(pdf.toString('base64'));
+      });
+
+      // Title
+      doc.fontSize(24).font('Helvetica-Bold').text('BOOKING RECEIPT', { align: 'center' });
+      doc.fontSize(10).text('MakeUP By Mercy', { align: 'center' });
+      doc.moveTo(40, doc.y + 10).lineTo(560, doc.y + 10).stroke();
+
+      // Booking Details
+      doc.fontSize(12).font('Helvetica-Bold').text('Booking Details', doc.y + 15);
+      doc.fontSize(10).font('Helvetica');
+      doc.text(`Booking ID: ${booking.bookingNumber}`, doc.y + 5);
+      doc.text(`Name: ${booking.name}`, doc.y + 5);
+      doc.text(`Email: ${booking.email}`, doc.y + 5);
+      doc.text(`Phone: ${booking.phone}`, doc.y + 5);
+      doc.text(`Country: ${booking.country}`, doc.y + 5);
+      doc.text(`Service: ${booking.service.toUpperCase()}`, doc.y + 5);
+      doc.text(`Date: ${new Date(booking.date).toLocaleDateString()}`, doc.y + 5);
+      doc.text(`Status: ${booking.status.toUpperCase()}`, doc.y + 5);
+      doc.text(`Booked On: ${new Date(booking.bookedAt).toLocaleString()}`, doc.y + 5);
+
+      // QR Code
+      generateQRCode(`${booking.bookingNumber}`).then((qrCode) => {
+        if (qrCode) {
+          const img = Buffer.from(qrCode.replace('data:image/png;base64,', ''), 'base64');
+          doc.image(img, doc.page.margins.left, doc.y + 20, { width: 100, height: 100 });
+        }
+
+        doc.fontSize(9).text('Scan QR code to track your booking', doc.x + 110, doc.y - 80);
+
+        // Footer
+        doc.fontSize(8).font('Helvetica-Oblique');
+        doc.text('Thank you for booking with MakeUP By Mercy!', { align: 'center', y: 750 });
+        doc.text('For more details, visit our website or contact us on WhatsApp', { align: 'center' });
+
+        doc.end();
+      });
+    } catch (error) {
+      log('ERROR', 'Receipt PDF generation error:', error.message);
+      reject(error);
+    }
+  });
+}
+
+// ========== NEW RECEIPT & MANAGEMENT ENDPOINTS ==========
+
+// Download Receipt as PDF
+app.get('/api/bookings/:id/receipt/pdf', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let booking = null;
+
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      booking = await Booking.findOne({ bookingNumber: id });
+    } else {
+      booking = bookings.find(b => b.bookingNumber === id);
+    }
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const pdfBase64 = await generateReceiptPDF(booking);
+    const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=booking-${booking.bookingNumber}.pdf`);
+    res.send(pdfBuffer);
+
+    log('INFO', `Receipt PDF downloaded: ${booking.bookingNumber}`);
+  } catch (error) {
+    log('ERROR', 'Receipt download error:', error.message);
+    res.status(500).json({ success: false, message: 'Error generating receipt' });
+  }
+});
+
+// Download Receipt as Image (PNG with booking details)
+app.get('/api/bookings/:id/receipt/image', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let booking = null;
+
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      booking = await Booking.findOne({ bookingNumber: id });
+    } else {
+      booking = bookings.find(b => b.bookingNumber === id);
+    }
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const qrCode = await generateQRCode(`${booking.bookingNumber}`);
+    if (!qrCode) {
+      return res.status(500).json({ success: false, message: 'Error generating QR code' });
+    }
+
+    res.json({ success: true, qrCode, booking });
+    log('INFO', `Receipt image generated: ${booking.bookingNumber}`);
+  } catch (error) {
+    log('ERROR', 'Receipt image error:', error.message);
+    res.status(500).json({ success: false, message: 'Error generating receipt' });
+  }
+});
+
+// Contact Customer (Admin only)
+app.post('/api/admin/bookings/:id/contact', verifyAdminToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { subject, message } = req.body;
+
+    let booking = null;
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      booking = await Booking.findOne({ bookingNumber: id });
+    } else {
+      booking = bookings.find(b => b.bookingNumber === id);
+    }
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Send email to customer
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: booking.email,
+      subject: subject || `Update regarding your booking ${booking.bookingNumber}`,
+      html: `
+        <h2>Hello ${booking.name},</h2>
+        <p>${message}</p>
+        <p><strong>Booking ID:</strong> ${booking.bookingNumber}</p>
+        <p><strong>Service:</strong> ${booking.service}</p>
+        <p><strong>Date:</strong> ${new Date(booking.date).toLocaleDateString()}</p>
+        <p>Best regards,<br>MakeUP By Mercy</p>
+      `
+    });
+
+    res.json({ success: true, message: 'Message sent to customer' });
+    log('INFO', `Contact message sent to ${booking.email} for booking ${id}`);
+  } catch (error) {
+    log('ERROR', 'Contact customer error:', error.message);
+    res.status(500).json({ success: false, message: 'Error sending message' });
+  }
+});
+
+// Update Booking Status (Workflow: pending -> confirmed -> completed/cancelled)
+app.patch('/api/admin/bookings/:id/status', verifyAdminToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    let booking = null;
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      booking = await Booking.findOneAndUpdate(
+        { bookingNumber: id },
+        { status, updatedAt: new Date() },
+        { new: true }
+      );
+    } else {
+      booking = bookings.find(b => b.bookingNumber === id);
+      if (booking) booking.status = status;
+    }
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    res.json({ success: true, booking, message: `Booking status updated to ${status}` });
+    log('INFO', `Booking status updated: ${id} -> ${status}`);
+  } catch (error) {
+    log('ERROR', 'Status update error:', error.message);
+    res.status(500).json({ success: false, message: 'Error updating status' });
+  }
+});
+
+// ========== ADMIN USER MANAGEMENT ENDPOINTS ==========
+
+// Create Admin User (Super admin only)
+app.post('/api/admin/users', verifyAdminToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { username, email, password, role } = req.body;
+
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      return res.status(400).json({ success: false, message: 'Database required for user management' });
+    }
+
+    const hashedPassword = await bcryptjs.hash(password, 10);
+    const newAdmin = await Admin.create({
+      username,
+      email,
+      password: hashedPassword,
+      role: role || 'manager',
+      active: true
+    });
+
+    res.json({ success: true, admin: { username: newAdmin.username, email: newAdmin.email, role: newAdmin.role } });
+    log('INFO', `New admin user created: ${username} (${role})`);
+  } catch (error) {
+    log('ERROR', 'User creation error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get All Admin Users (Admin only)
+app.get('/api/admin/users', verifyAdminToken, requireRole('admin'), async (req, res) => {
+  try {
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      return res.json({ success: true, users: [] });
+    }
+
+    const users = await Admin.find({}, '-password');
+    res.json({ success: true, users });
+  } catch (error) {
+    log('ERROR', 'Get users error:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching users' });
+  }
+});
+
+// Update Admin User (Self or Admin)
+app.patch('/api/admin/users/:userId', verifyAdminToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { email, password, role } = req.body;
+
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      return res.status(400).json({ success: false, message: 'Database required' });
+    }
+
+    const updateData = { email };
+    if (password) {
+      updateData.password = await bcryptjs.hash(password, 10);
+    }
+    if (role && req.admin.role === 'admin') {
+      updateData.role = role;
+    }
+
+    const updatedAdmin = await Admin.findByIdAndUpdate(userId, updateData, { new: true });
+    res.json({ success: true, admin: { username: updatedAdmin.username, email: updatedAdmin.email, role: updatedAdmin.role } });
+    log('INFO', `Admin user updated: ${updatedAdmin.username}`);
+  } catch (error) {
+    log('ERROR', 'User update error:', error.message);
+    res.status(500).json({ success: false, message: 'Error updating user' });
+  }
+});
+
+// Delete Admin User (Admin only)
+app.delete('/api/admin/users/:userId', verifyAdminToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      return res.status(400).json({ success: false, message: 'Database required' });
+    }
+
+    await Admin.findByIdAndDelete(userId);
+    res.json({ success: true, message: 'User deleted' });
+    log('INFO', `Admin user deleted: ${userId}`);
+  } catch (error) {
+    log('ERROR', 'User deletion error:', error.message);
+    res.status(500).json({ success: false, message: 'Error deleting user' });
+  }
+});
+
+// Initialize default admin on startup
+mongoose.connection.once('connected', () => {
+  initializeDefaultAdmin();
 });
 
 // Serve index.html for root path

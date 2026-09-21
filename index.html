@@ -1044,6 +1044,59 @@
             color: white;
         }
 
+        .btn-receipt {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .btn-receipt:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .qr-code-container {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 2px solid #e0e0e0;
+        }
+
+        /* Rolling Animation for Booking in Progress */
+        @keyframes rolling {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .booking-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #cc3380;
+            border-radius: 50%;
+            animation: rolling 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        .booking-in-progress {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            color: #856404;
+            margin: 15px 0;
+        }
+
         @keyframes scaleIn {
             0% {
                 transform: scale(0);
@@ -2893,6 +2946,64 @@
                 alert('Booking number copied to clipboard!');
             });
         }
+
+        // Store current booking for receipt download
+        let currentBooking = null;
+
+        // Download Receipt as PDF
+        function downloadReceiptPDF() {
+            if (!currentBooking || !currentBooking.bookingNumber) {
+                alert('No booking data available');
+                return;
+            }
+
+            const bookingId = currentBooking.bookingNumber;
+            const link = document.createElement('a');
+            link.href = `${API_URL.replace('/api', '')}/bookings/${bookingId}/receipt/pdf`;
+            link.download = `booking-${bookingId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Download Receipt as Image (QR Code)
+        function downloadReceiptImage() {
+            if (!currentBooking || !currentBooking.bookingNumber) {
+                alert('No booking data available');
+                return;
+            }
+
+            const bookingId = currentBooking.bookingNumber;
+            fetch(`${API_URL.replace('/api', '')}/bookings/${bookingId}/receipt/image`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.qrCode) {
+                        // Display QR code in modal
+                        const qrContainer = document.getElementById('qrCodeDisplay');
+                        qrContainer.innerHTML = `<img src="${data.qrCode}" alt="QR Code" style="width: 150px; height: 150px;">`;
+                        document.getElementById('qrCodeContainer').style.display = 'block';
+
+                        // Download QR code image
+                        const link = document.createElement('a');
+                        link.href = data.qrCode;
+                        link.download = `qr-code-${bookingId}.png`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error downloading receipt image:', error);
+                    alert('Error generating receipt image');
+                });
+        }
+
+        // Update showConfirmationModal to store booking data
+        const originalShowConfirmationModal2 = window.showConfirmationModal;
+        window.showConfirmationModal = function(booking) {
+            currentBooking = booking;
+            originalShowConfirmationModal2(booking);
+        };
     </script>
 
     <!-- CONFIRMATION MODAL -->
@@ -2910,6 +3021,12 @@
                 <p>Loading details...</p>
             </div>
 
+            <!-- QR Code Display -->
+            <div class="qr-code-container" id="qrCodeContainer" style="display: none; margin: 20px 0;">
+                <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Scan to track your booking:</p>
+                <div id="qrCodeDisplay" style="text-align: center;"></div>
+            </div>
+
             <p style="color: #999; font-size: 12px; margin-top: 15px;">
                 Save your booking number for future reference
             </p>
@@ -2917,6 +3034,12 @@
             <div class="confirmation-buttons">
                 <button class="btn-copy-id" onclick="copyBookingNumber()">
                     <i class="fas fa-copy"></i> Copy ID
+                </button>
+                <button class="btn-receipt" onclick="downloadReceiptPDF()" style="background: #4CAF50;">
+                    <i class="fas fa-file-pdf"></i> Download PDF
+                </button>
+                <button class="btn-receipt" onclick="downloadReceiptImage()" style="background: #2196F3;">
+                    <i class="fas fa-image"></i> Get QR Code
                 </button>
                 <button class="btn-close-confirmation" onclick="closeConfirmationModal(); document.getElementById('bookingForm').reset();">
                     Close
