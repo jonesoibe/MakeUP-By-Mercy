@@ -845,19 +845,59 @@
 
                     <div id="pricing-tab" class="tab-content">
                         <h3>Service Pricing</h3>
-                        <div class="form-group">
-                            <label>Bridal Makeup (₦)</label>
-                            <input type="number" id="price-bridal" value="25000" min="0">
+                        <div id="pricing-loading" class="loading" style="display: none;">
+                            <i class="fas fa-spinner"></i>
+                            <p>Loading pricing...</p>
                         </div>
-                        <div class="form-group">
-                            <label>Party Makeup (₦)</label>
-                            <input type="number" id="price-party" value="15000" min="0">
+                        <div id="pricing-content">
+                            <div class="form-group">
+                                <label>Bridal Makeup (₦)</label>
+                                <input type="number" id="price-bridal" min="0">
+                                <small id="bridal-desc"></small>
+                            </div>
+                            <div class="form-group">
+                                <label>Bridal Description</label>
+                                <input type="text" id="desc-bridal" placeholder="e.g., Professional bridal makeup with full coverage">
+                            </div>
+                            <div class="form-group">
+                                <label>Bridal Duration</label>
+                                <input type="text" id="duration-bridal" placeholder="e.g., 2-3 hours">
+                            </div>
+
+                            <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+
+                            <div class="form-group">
+                                <label>Party Makeup (₦)</label>
+                                <input type="number" id="price-party" min="0">
+                                <small id="party-desc"></small>
+                            </div>
+                            <div class="form-group">
+                                <label>Party Description</label>
+                                <input type="text" id="desc-party" placeholder="e.g., Glamorous party makeup for special occasions">
+                            </div>
+                            <div class="form-group">
+                                <label>Party Duration</label>
+                                <input type="text" id="duration-party" placeholder="e.g., 1.5-2 hours">
+                            </div>
+
+                            <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+
+                            <div class="form-group">
+                                <label>Casual Makeup (₦)</label>
+                                <input type="number" id="price-casual" min="0">
+                                <small id="casual-desc"></small>
+                            </div>
+                            <div class="form-group">
+                                <label>Casual Description</label>
+                                <input type="text" id="desc-casual" placeholder="e.g., Natural everyday makeup look">
+                            </div>
+                            <div class="form-group">
+                                <label>Casual Duration</label>
+                                <input type="text" id="duration-casual" placeholder="e.g., 1-1.5 hours">
+                            </div>
+
+                            <button class="btn btn-primary" onclick="savePricing()"><i class="fas fa-save"></i> Save All Pricing</button>
                         </div>
-                        <div class="form-group">
-                            <label>Casual Makeup (₦)</label>
-                            <input type="number" id="price-casual" value="10000" min="0">
-                        </div>
-                        <button class="btn btn-primary" onclick="savePricing()"><i class="fas fa-save"></i> Save Pricing</button>
                     </div>
 
                     <div id="email-templates-tab" class="tab-content">
@@ -969,6 +1009,8 @@ We look forward to making you look stunning!</textarea>
                 loadAllBookings();
             } else if (section === 'analytics') {
                 loadAnalytics();
+            } else if (section === 'settings') {
+                loadPricing();
             }
         }
 
@@ -1335,15 +1377,82 @@ We look forward to making you look stunning!</textarea>
             showSuccess('Availability updated successfully!');
         }
 
-        function savePricing() {
-            const prices = {
-                bridal: parseInt(document.getElementById('price-bridal').value),
-                party: parseInt(document.getElementById('price-party').value),
-                casual: parseInt(document.getElementById('price-casual').value)
-            };
-            bookingPrices = prices;
-            localStorage.setItem('bookingPrices', JSON.stringify(prices));
-            showSuccess('Pricing updated successfully!');
+        async function loadPricing() {
+            try {
+                document.getElementById('pricing-loading').style.display = 'block';
+                document.getElementById('pricing-content').style.display = 'none';
+
+                const response = await fetch('/api/admin/services', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.services) {
+                    data.services.forEach(service => {
+                        document.getElementById(`price-${service.name}`).value = service.price;
+                        document.getElementById(`desc-${service.name}`).value = service.description || '';
+                        document.getElementById(`duration-${service.name}`).value = service.duration || '';
+                        document.getElementById(`${service.name}-desc`).textContent = service.description || '';
+                    });
+                    bookingPrices = data.services.reduce((acc, s) => {
+                        acc[s.name] = s.price;
+                        return acc;
+                    }, {});
+                }
+            } catch (error) {
+                console.error('Error loading pricing:', error);
+            } finally {
+                document.getElementById('pricing-loading').style.display = 'none';
+                document.getElementById('pricing-content').style.display = 'block';
+            }
+        }
+
+        async function savePricing() {
+            try {
+                const services = ['bridal', 'party', 'casual'];
+                const adminToken = localStorage.getItem('adminToken');
+
+                for (const service of services) {
+                    const price = parseInt(document.getElementById(`price-${service}`).value);
+                    const description = document.getElementById(`desc-${service}`).value;
+                    const duration = document.getElementById(`duration-${service}`).value;
+
+                    if (isNaN(price) || price < 0) {
+                        showSuccess(`Invalid price for ${service}!`, true);
+                        return;
+                    }
+
+                    const response = await fetch(`/api/admin/services/${service}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + adminToken
+                        },
+                        body: JSON.stringify({ price, description, duration })
+                    });
+
+                    const data = await response.json();
+                    if (!data.success) {
+                        showSuccess(`Error updating ${service}: ${data.message}`, true);
+                        return;
+                    }
+                }
+
+                // Update local prices
+                bookingPrices = {
+                    bridal: parseInt(document.getElementById('price-bridal').value),
+                    party: parseInt(document.getElementById('price-party').value),
+                    casual: parseInt(document.getElementById('price-casual').value)
+                };
+
+                showSuccess('✅ All pricing updated successfully in database!');
+            } catch (error) {
+                console.error('Error saving pricing:', error);
+                showSuccess('Error saving pricing!', true);
+            }
         }
 
         function saveEmailTemplate() {

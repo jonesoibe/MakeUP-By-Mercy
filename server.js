@@ -123,6 +123,39 @@ const bookingSchema = new mongoose.Schema({
 
 const Booking = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
 
+// ========== SERVICE PRICING SCHEMA ==========
+const serviceSchema = new mongoose.Schema({
+  name: { type: String, unique: true, required: true },
+  price: { type: Number, required: true },
+  description: { type: String, default: '' },
+  duration: { type: String, default: '2-3 hours' },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const Service = mongoose.models.Service || mongoose.model('Service', serviceSchema);
+
+// Initialize default services if they don't exist
+async function initializeDefaultServices() {
+  try {
+    const count = await Service.countDocuments();
+    if (count === 0) {
+      await Service.insertMany([
+        { name: 'bridal', price: 25000, description: 'Professional bridal makeup with full coverage and long-lasting finish', duration: '2-3 hours' },
+        { name: 'party', price: 15000, description: 'Glamorous party makeup for special occasions', duration: '1.5-2 hours' },
+        { name: 'casual', price: 10000, description: 'Natural everyday makeup look', duration: '1-1.5 hours' }
+      ]);
+      log('INFO', 'Default services initialized');
+    }
+  } catch (err) {
+    log('ERROR', 'Failed to initialize default services:', err.message);
+  }
+}
+
+// Initialize on startup
+if (MONGO_URI) {
+  setTimeout(initializeDefaultServices, 2000);
+}
+
 // ========== EMAIL CONFIGURATION ==========
 // Use TLS (port 587) for more reliable Gmail connection
 const transporter = nodemailer.createTransport({
@@ -1535,6 +1568,104 @@ app.delete('/api/admin/users/:userId', verifyAdminToken, requireRole('admin'), a
   } catch (error) {
     log('ERROR', 'User deletion error:', error.message);
     res.status(500).json({ success: false, message: 'Error deleting user' });
+  }
+});
+
+// ========== SERVICE PRICING ENDPOINTS ==========
+
+// Get all services with pricing (public endpoint)
+app.get('/api/services', async (req, res) => {
+  try {
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      // Return default pricing if database not available
+      return res.json({ success: true, services: [
+        { name: 'bridal', price: 25000, description: 'Professional bridal makeup', duration: '2-3 hours' },
+        { name: 'party', price: 15000, description: 'Glamorous party makeup', duration: '1.5-2 hours' },
+        { name: 'casual', price: 10000, description: 'Natural everyday makeup', duration: '1-1.5 hours' }
+      ]});
+    }
+
+    const services = await Service.find({}, '-_id name price description duration').sort({ name: 1 });
+    res.json({ success: true, services });
+  } catch (error) {
+    log('ERROR', 'Get services error:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching services' });
+  }
+});
+
+// Get single service pricing (public endpoint)
+app.get('/api/services/:name', async (req, res) => {
+  try {
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      const defaults = { bridal: 25000, party: 15000, casual: 10000 };
+      return res.json({ success: true, service: { name: req.params.name, price: defaults[req.params.name] || 0 }});
+    }
+
+    const service = await Service.findOne({ name: req.params.name }, '-_id name price description duration');
+    if (!service) {
+      return res.status(404).json({ success: false, message: 'Service not found' });
+    }
+    res.json({ success: true, service });
+  } catch (error) {
+    log('ERROR', 'Get service error:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching service' });
+  }
+});
+
+// Update service pricing (admin only)
+app.patch('/api/admin/services/:name', verifyAdminToken, async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { price, description, duration } = req.body;
+
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      return res.status(400).json({ success: false, message: 'Database required' });
+    }
+
+    // Validate input
+    if (price !== undefined && (typeof price !== 'number' || price < 0)) {
+      return res.status(400).json({ success: false, message: 'Price must be a non-negative number' });
+    }
+
+    const updateData = { updatedAt: new Date() };
+    if (price !== undefined) updateData.price = price;
+    if (description !== undefined) updateData.description = description;
+    if (duration !== undefined) updateData.duration = duration;
+
+    const service = await Service.findOneAndUpdate(
+      { name },
+      updateData,
+      { new: true, upsert: false }
+    );
+
+    if (!service) {
+      return res.status(404).json({ success: false, message: 'Service not found' });
+    }
+
+    log('INFO', `Service pricing updated: ${name} - ₦${service.price}`, { admin: req.admin.username });
+    res.json({ success: true, message: 'Service updated', service });
+  } catch (error) {
+    log('ERROR', 'Update service error:', error.message);
+    res.status(500).json({ success: false, message: 'Error updating service' });
+  }
+});
+
+// Get all services for admin (for editing)
+app.get('/api/admin/services', verifyAdminToken, async (req, res) => {
+  try {
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      return res.json({ success: true, services: [
+        { name: 'bridal', price: 25000, description: 'Professional bridal makeup', duration: '2-3 hours' },
+        { name: 'party', price: 15000, description: 'Glamorous party makeup', duration: '1.5-2 hours' },
+        { name: 'casual', price: 10000, description: 'Natural everyday makeup', duration: '1-1.5 hours' }
+      ]});
+    }
+
+    const services = await Service.find({});
+    res.json({ success: true, services });
+  } catch (error) {
+    log('ERROR', 'Get admin services error:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching services' });
   }
 });
 

@@ -2682,6 +2682,56 @@
             ? 'http://localhost:3000/api'
             : `${window.location.protocol}//${window.location.host}/api`;
 
+        // Service prices (will be updated from database)
+        let servicePrices = {
+            bridal: 25000,
+            party: 15000,
+            casual: 10000
+        };
+
+        // Load service prices from database
+        async function loadServicePrices() {
+            try {
+                const response = await fetch(`${API_URL}/services`);
+                const data = await response.json();
+
+                if (data.success && data.services) {
+                    data.services.forEach(service => {
+                        servicePrices[service.name] = service.price;
+                    });
+
+                    // Update pricing display
+                    updatePricingDisplay();
+                }
+            } catch (error) {
+                console.error('Error loading service prices:', error);
+                // Use default prices on error
+            }
+        }
+
+        // Update pricing display on the page
+        function updatePricingDisplay() {
+            // Update pricing cards
+            const pricingCards = document.querySelectorAll('.pricing-card');
+
+            pricingCards.forEach(card => {
+                const title = card.querySelector('h3').textContent;
+                let serviceName = '';
+
+                if (title.includes('Bridal')) serviceName = 'bridal';
+                else if (title.includes('Party')) serviceName = 'party';
+                else if (title.includes('Casual')) serviceName = 'casual';
+
+                if (serviceName && servicePrices[serviceName]) {
+                    const priceElement = card.querySelector('.pricing-price');
+                    if (priceElement) {
+                        const price = servicePrices[serviceName];
+                        priceElement.textContent = `₦${price.toLocaleString()}`;
+                    }
+                }
+            });
+        }
+
         function validateName() {
             const nameInput = document.getElementById('name');
             const nameError = document.getElementById('nameError');
@@ -3098,6 +3148,9 @@
 
         // ========== SERVICES CARD ANIMATIONS ==========
         document.addEventListener('DOMContentLoaded', () => {
+            // Load service prices from database
+            loadServicePrices();
+
             const serviceCards = document.querySelectorAll('.service-card');
             serviceCards.forEach((card, index) => {
                 card.style.animationDelay = `${index * 0.15}s`;
