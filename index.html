@@ -928,11 +928,12 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.4);
             z-index: 1000;
             align-items: center;
             justify-content: center;
             animation: fadeIn 0.3s ease;
+            overflow-y: auto;
         }
 
         .confirmation-modal.show {
@@ -942,11 +943,39 @@
         .confirmation-content {
             background: white;
             border-radius: 20px;
-            padding: 50px 40px;
-            max-width: 500px;
+            padding: 40px 30px;
+            max-width: 450px;
+            width: 90%;
             text-align: center;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             animation: slideInUp 0.5s ease;
+            position: relative;
+            margin: 20px auto;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .confirmation-close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .confirmation-close-btn:hover {
+            background: #f0f0f0;
+            color: #333;
         }
 
         .confirmation-icon {
@@ -1007,6 +1036,7 @@
             gap: 10px;
             justify-content: center;
             margin-top: 30px;
+            flex-wrap: wrap;
         }
 
         .btn-close-confirmation {
@@ -1019,6 +1049,17 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .btn-close-confirmation:hover {
+            background-color: #229954;
+            transform: translateY(-2px);
+        }
+
+        .btn-close-confirmation:active {
+            transform: translateY(0);
         }
 
         .btn-close-confirmation:hover {
@@ -1053,9 +1094,39 @@
             cursor: pointer;
             transition: all 0.3s ease;
             font-size: 14px;
+            flex: 1;
+            min-width: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
         .btn-receipt:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-copy-id {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            flex: 1;
+            min-width: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: #ff9800;
+        }
+
+        .btn-copy-id:hover {
+            background: #e68900;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
         }
@@ -2293,6 +2364,106 @@
                 font-size: 14px;
                 padding: 12px 36px 12px 14px;
             }
+
+            /* Mobile responsive for confirmation modal */
+            .confirmation-content {
+                padding: 30px 20px;
+                max-width: 95%;
+                width: 95%;
+            }
+
+            .confirmation-title {
+                font-size: 22px;
+            }
+
+            .confirmation-icon {
+                font-size: 60px;
+            }
+
+            .booking-number {
+                font-size: 18px;
+                padding: 12px 20px;
+            }
+
+            .confirmation-details {
+                padding: 15px;
+                font-size: 13px;
+            }
+
+            .confirmation-buttons {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .btn-receipt,
+            .btn-copy-id,
+            .btn-close-confirmation {
+                width: 100%;
+                min-width: unset;
+            }
+
+            .confirmation-message {
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .confirmation-content {
+                padding: 25px 15px;
+                max-width: 100%;
+                width: 100%;
+                border-radius: 15px;
+                max-height: calc(100vh - 40px);
+            }
+
+            .confirmation-close-btn {
+                top: 10px;
+                right: 10px;
+                width: 30px;
+                height: 30px;
+                font-size: 20px;
+            }
+
+            .confirmation-title {
+                font-size: 18px;
+            }
+
+            .confirmation-icon {
+                font-size: 50px;
+            }
+
+            .booking-number {
+                font-size: 16px;
+                padding: 10px 15px;
+                margin: 15px 0;
+            }
+
+            .confirmation-details {
+                padding: 12px;
+                font-size: 12px;
+                margin: 15px 0;
+            }
+
+            .confirmation-details p {
+                margin: 6px 0;
+            }
+
+            .confirmation-buttons {
+                margin-top: 20px;
+                gap: 6px;
+            }
+
+            .btn-receipt,
+            .btn-copy-id,
+            .btn-close-confirmation {
+                padding: 10px 12px;
+                font-size: 13px;
+            }
+
+            .qr-code-container {
+                padding: 15px;
+                margin: 15px 0;
+            }
         }
     </style>
 </head>
@@ -3009,6 +3180,29 @@
             });
         }
 
+        // Close modal when clicking outside of it
+        document.addEventListener('click', (event) => {
+            const modal = document.getElementById('confirmationModal');
+            const confirmationContent = document.querySelector('.confirmation-content');
+
+            if (modal && modal.classList.contains('show')) {
+                // Check if click is on modal backdrop (not on the content)
+                if (event.target === modal) {
+                    closeConfirmationModal();
+                }
+            }
+        });
+
+        // Close modal when pressing Escape key
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                const modal = document.getElementById('confirmationModal');
+                if (modal && modal.classList.contains('show')) {
+                    closeConfirmationModal();
+                }
+            }
+        });
+
         // Store current booking for receipt download
         let currentBooking = null;
 
@@ -3086,6 +3280,7 @@
     <!-- CONFIRMATION MODAL -->
     <div id="confirmationModal" class="confirmation-modal">
         <div class="confirmation-content">
+            <button class="confirmation-close-btn" onclick="closeConfirmationModal()" title="Close">✕</button>
             <div class="confirmation-icon">✓</div>
             <h2 class="confirmation-title">Booking Confirmed!</h2>
             <p class="confirmation-message">
