@@ -1794,6 +1794,373 @@
             animation: glowEffect 1.5s ease infinite;
         }
 
+        /* PRICING SECTION */
+        .pricing {
+            padding: 80px 40px;
+            background: linear-gradient(135deg, #f9f5fc 0%, #fef5f9 100%);
+        }
+
+        .pricing h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 48px;
+            color: #cc3380;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .pricing-subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 50px;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .pricing-card {
+            background: white;
+            border-radius: 12px;
+            padding: 40px 30px;
+            box-shadow: 0 5px 20px rgba(204, 51, 128, 0.08);
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+        }
+
+        .pricing-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(204, 51, 128, 0.15);
+        }
+
+        .pricing-featured {
+            border: 3px solid #cc3380;
+            transform: scale(1.05);
+        }
+
+        .pricing-featured:hover {
+            transform: translateY(-10px) scale(1.05);
+        }
+
+        .pricing-badge {
+            position: absolute;
+            top: -15px;
+            left: 20px;
+            background: linear-gradient(135deg, #cc3380 0%, #8b2667 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .pricing-header {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .pricing-header h3 {
+            font-family: 'Playfair Display', serif;
+            font-size: 24px;
+            color: #cc3380;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .pricing-price {
+            font-size: 28px;
+            font-weight: 700;
+            color: #cc3380;
+            margin-bottom: 5px;
+        }
+
+        .pricing-duration {
+            font-size: 14px;
+            color: #999;
+        }
+
+        .pricing-features {
+            flex-grow: 1;
+            margin-bottom: 30px;
+        }
+
+        .pricing-features h4 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .pricing-features ul {
+            list-style: none;
+        }
+
+        .pricing-features li {
+            padding: 10px 0;
+            color: #555;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pricing-features i {
+            color: #27ae60;
+            font-size: 16px;
+        }
+
+        .pricing-btn {
+            background: linear-gradient(135deg, #cc3380 0%, #8b2667 100%);
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            border-radius: 8px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.5px;
+        }
+
+        .pricing-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(204, 51, 128, 0.3);
+        }
+
+        .pricing-btn-featured {
+            background: white;
+            color: #cc3380;
+            border: 2px solid #cc3380;
+        }
+
+        .pricing-btn-featured:hover {
+            background: #cc3380;
+            color: white;
+        }
+
+        /* BEFORE & AFTER GALLERY */
+        .before-after {
+            padding: 80px 40px;
+            background: linear-gradient(180deg, #fef5f9 0%, #f9f5fc 100%);
+        }
+
+        .before-after h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 48px;
+            color: #cc3380;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .before-after-subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 50px;
+        }
+
+        .before-after-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .before-after-item {
+            text-align: center;
+        }
+
+        .before-after-slider {
+            position: relative;
+            width: 100%;
+            height: 350px;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(204, 51, 128, 0.15);
+        }
+
+        .before-after-img {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .before-after-before {
+            left: 0;
+            background: linear-gradient(135deg, #e8d4e8 0%, #f0e0f0 100%);
+        }
+
+        .before-after-after {
+            right: 0;
+            width: 100%;
+            background: linear-gradient(135deg, #ffd9e6 0%, #ffe6f0 100%);
+            clip-path: inset(0 0 0 50%);
+        }
+
+        .before-after-before-2 {
+            background: linear-gradient(135deg, #e8d4e8 0%, #f0e0f0 100%);
+        }
+
+        .before-after-after-2 {
+            background: linear-gradient(135deg, #fff0f5 0%, #ffd9e6 100%);
+            clip-path: inset(0 0 0 50%);
+        }
+
+        .before-after-before-3 {
+            background: linear-gradient(135deg, #f5e8f0 0%, #f9f0f5 100%);
+        }
+
+        .before-after-after-3 {
+            background: linear-gradient(135deg, #fff5fa 0%, #ffe6f0 100%);
+            clip-path: inset(0 0 0 50%);
+        }
+
+        .before-after-label {
+            background: rgba(204, 51, 128, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .before-after-slider-handle {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            cursor: col-resize;
+            appearance: none;
+            background: transparent;
+            margin: 0;
+            padding: 0;
+            z-index: 5;
+        }
+
+        .before-after-slider-handle::-webkit-slider-thumb {
+            appearance: none;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #cc3380 0%, #8b2667 100%);
+            cursor: col-resize;
+            box-shadow: 0 0 20px rgba(204, 51, 128, 0.4);
+        }
+
+        .before-after-slider-handle::-moz-range-thumb {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #cc3380 0%, #8b2667 100%);
+            cursor: col-resize;
+            border: none;
+            box-shadow: 0 0 20px rgba(204, 51, 128, 0.4);
+        }
+
+        .before-after-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 20px;
+            color: #cc3380;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .before-after-desc {
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* FAQ SEARCH & FILTERS */
+        .faq-search-container {
+            position: relative;
+            max-width: 500px;
+            margin: 0 auto 30px;
+        }
+
+        .faq-search {
+            width: 100%;
+            padding: 14px 40px 14px 16px;
+            font-size: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Poppins', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .faq-search:focus {
+            outline: none;
+            border-color: #cc3380;
+            box-shadow: 0 0 0 4px rgba(204, 51, 128, 0.1);
+        }
+
+        .faq-search-icon {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #999;
+            pointer-events: none;
+        }
+
+        .faq-filters {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 30px;
+        }
+
+        .faq-filter-btn {
+            padding: 10px 20px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            color: #666;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: capitalize;
+        }
+
+        .faq-filter-btn:hover {
+            border-color: #cc3380;
+            color: #cc3380;
+        }
+
+        .faq-filter-btn.active {
+            background: #cc3380;
+            border-color: #cc3380;
+            color: white;
+        }
+
+        .faq-item.hidden {
+            display: none;
+        }
+
         /* RESPONSIVE ANIMATIONS */
         @media (max-width: 768px) {
             .service-card {
@@ -1806,6 +2173,72 @@
 
             .hero h1 {
                 font-size: 36px;
+            }
+
+            .pricing {
+                padding: 60px 20px;
+            }
+
+            .pricing h2 {
+                font-size: 36px;
+                margin-bottom: 25px;
+            }
+
+            .pricing-grid {
+                gap: 20px;
+            }
+
+            .pricing-featured {
+                transform: scale(1);
+            }
+
+            .pricing-featured:hover {
+                transform: translateY(-10px);
+            }
+
+            .pricing-card {
+                padding: 30px 20px;
+            }
+
+            .before-after {
+                padding: 60px 20px;
+            }
+
+            .before-after h2 {
+                font-size: 36px;
+                margin-bottom: 25px;
+            }
+
+            .before-after-container {
+                gap: 30px;
+            }
+
+            .before-after-slider {
+                height: 250px;
+            }
+
+            .before-after-slider-handle::-webkit-slider-thumb {
+                width: 50px;
+                height: 50px;
+            }
+
+            .before-after-slider-handle::-moz-range-thumb {
+                width: 50px;
+                height: 50px;
+            }
+
+            .faq-filters {
+                gap: 8px;
+            }
+
+            .faq-filter-btn {
+                padding: 8px 14px;
+                font-size: 12px;
+            }
+
+            .faq-search {
+                font-size: 14px;
+                padding: 12px 36px 12px 14px;
             }
         }
     </style>
@@ -1853,6 +2286,74 @@
                     <h3>Casual Makeup</h3>
                     <p>Professional makeup artist specializing in casual makeup. Everyday looks that enhance your natural beauty effortlessly.</p>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PRICING TIERS SECTION -->
+    <section class="pricing" id="pricing">
+        <h2>Our Pricing Tiers</h2>
+        <p class="pricing-subtitle">Transparent, competitive pricing for all your makeup needs</p>
+        <div class="pricing-grid">
+            <div class="pricing-card">
+                <div class="pricing-header">
+                    <h3>Bridal Makeup</h3>
+                    <p class="pricing-price">₦15,000 - ₦25,000</p>
+                    <p class="pricing-duration">60-90 minutes</p>
+                </div>
+                <div class="pricing-features">
+                    <h4>Includes:</h4>
+                    <ul>
+                        <li><i class="fas fa-check"></i> Professional makeup application</li>
+                        <li><i class="fas fa-check"></i> Long-lasting formula</li>
+                        <li><i class="fas fa-check"></i> Touch-up kit included</li>
+                        <li><i class="fas fa-check"></i> Bridal consultation</li>
+                        <li><i class="fas fa-check"></i> Custom color matching</li>
+                        <li><i class="fas fa-check"></i> HD makeup for photos</li>
+                    </ul>
+                </div>
+                <button class="pricing-btn" onclick="document.getElementById('booking').scrollIntoView({behavior: 'smooth'})">Book Now</button>
+            </div>
+
+            <div class="pricing-card pricing-featured">
+                <div class="pricing-badge">Most Popular</div>
+                <div class="pricing-header">
+                    <h3>Party Makeup</h3>
+                    <p class="pricing-price">₦8,000 - ₦15,000</p>
+                    <p class="pricing-duration">45-60 minutes</p>
+                </div>
+                <div class="pricing-features">
+                    <h4>Includes:</h4>
+                    <ul>
+                        <li><i class="fas fa-check"></i> Glamorous makeup look</li>
+                        <li><i class="fas fa-check"></i> All-night durability</li>
+                        <li><i class="fas fa-check"></i> Quick touch-up service</li>
+                        <li><i class="fas fa-check"></i> Style consultation</li>
+                        <li><i class="fas fa-check"></i> Professional blending</li>
+                        <li><i class="fas fa-check"></i> Confidence boost guarantee</li>
+                    </ul>
+                </div>
+                <button class="pricing-btn pricing-btn-featured" onclick="document.getElementById('booking').scrollIntoView({behavior: 'smooth'})">Book Now</button>
+            </div>
+
+            <div class="pricing-card">
+                <div class="pricing-header">
+                    <h3>Casual Makeup</h3>
+                    <p class="pricing-price">₦5,000 - ₦10,000</p>
+                    <p class="pricing-duration">30-45 minutes</p>
+                </div>
+                <div class="pricing-features">
+                    <h4>Includes:</h4>
+                    <ul>
+                        <li><i class="fas fa-check"></i> Natural everyday look</li>
+                        <li><i class="fas fa-check"></i> Skin-friendly products</li>
+                        <li><i class="fas fa-check"></i> Quick appointment</li>
+                        <li><i class="fas fa-check"></i> Care instructions</li>
+                        <li><i class="fas fa-check"></i> Makeup tips included</li>
+                        <li><i class="fas fa-check"></i> Follow-up support</li>
+                    </ul>
+                </div>
+                <button class="pricing-btn" onclick="document.getElementById('booking').scrollIntoView({behavior: 'smooth'})">Book Now</button>
             </div>
         </div>
     </section>
@@ -1911,31 +2412,90 @@
         </div>
     </section>
 
+    <!-- BEFORE & AFTER GALLERY SECTION -->
+    <section class="before-after" id="before-after">
+        <h2>Before & After Transformations</h2>
+        <p class="before-after-subtitle">See the magic of professional makeup</p>
+        <div class="before-after-container">
+            <div class="before-after-item">
+                <div class="before-after-slider">
+                    <div class="before-after-img before-after-before">
+                        <span class="before-after-label">Before</span>
+                    </div>
+                    <div class="before-after-img before-after-after">
+                        <span class="before-after-label">After</span>
+                    </div>
+                    <input type="range" min="0" max="100" value="50" class="before-after-slider-handle" oninput="updateSlider(this)">
+                </div>
+                <p class="before-after-title">Bridal Glamour</p>
+                <p class="before-after-desc">Professional bridal transformation with HD-ready makeup</p>
+            </div>
+
+            <div class="before-after-item">
+                <div class="before-after-slider">
+                    <div class="before-after-img before-after-before-2">
+                        <span class="before-after-label">Before</span>
+                    </div>
+                    <div class="before-after-img before-after-after-2">
+                        <span class="before-after-label">After</span>
+                    </div>
+                    <input type="range" min="0" max="100" value="50" class="before-after-slider-handle" oninput="updateSlider(this)">
+                </div>
+                <p class="before-after-title">Evening Elegance</p>
+                <p class="before-after-desc">Sophisticated makeup for special events and occasions</p>
+            </div>
+
+            <div class="before-after-item">
+                <div class="before-after-slider">
+                    <div class="before-after-img before-after-before-3">
+                        <span class="before-after-label">Before</span>
+                    </div>
+                    <div class="before-after-img before-after-after-3">
+                        <span class="before-after-label">After</span>
+                    </div>
+                    <input type="range" min="0" max="100" value="50" class="before-after-slider-handle" oninput="updateSlider(this)">
+                </div>
+                <p class="before-after-title">Everyday Glow</p>
+                <p class="before-after-desc">Natural, radiant makeup for daily confidence</p>
+            </div>
+        </div>
+    </section>
+
     <!-- FAQ SECTION -->
     <section class="faq" id="faq">
         <h2>Frequently Asked Questions</h2>
+        <div class="faq-search-container">
+            <input type="text" id="faqSearch" class="faq-search" placeholder="Search questions..." oninput="filterFAQ()">
+            <i class="fas fa-search faq-search-icon"></i>
+        </div>
+        <div class="faq-filters">
+            <button class="faq-filter-btn active" onclick="filterByCategory('all')">All</button>
+            <button class="faq-filter-btn" onclick="filterByCategory('services')">Services</button>
+            <button class="faq-filter-btn" onclick="filterByCategory('booking')">Booking</button>
+            <button class="faq-filter-btn" onclick="filterByCategory('products')">Products</button>
+        </div>
         <div class="faq-container">
-            <div class="faq-item">
+            <div class="faq-item" data-category="services">
                 <h3 class="faq-question">How long does a makeup session take?</h3>
                 <p class="faq-answer">A typical makeup session takes 45-60 minutes depending on the style. Bridal makeup takes slightly longer (60-90 minutes) to ensure perfection. We'll confirm the exact timing when you book.</p>
             </div>
-            <div class="faq-item">
+            <div class="faq-item" data-category="services">
                 <h3 class="faq-question">Do you offer travel services?</h3>
                 <p class="faq-answer">Yes! We offer travel services for events and occasions. Please mention your location when booking, and we'll confirm availability and any travel fees.</p>
             </div>
-            <div class="faq-item">
+            <div class="faq-item" data-category="products">
                 <h3 class="faq-question">What products do you use?</h3>
                 <p class="faq-answer">We use professional-grade, high-quality makeup products that are long-lasting, cruelty-free, and hypoallergenic. All products are suitable for all skin types.</p>
             </div>
-            <div class="faq-item">
+            <div class="faq-item" data-category="booking">
                 <h3 class="faq-question">Can I request a specific makeup style?</h3>
                 <p class="faq-answer">Absolutely! We love custom requests. Feel free to share photos, inspiration, or describe your ideal look when you book. We'll work with you to create the perfect makeup.</p>
             </div>
-            <div class="faq-item">
+            <div class="faq-item" data-category="booking">
                 <h3 class="faq-question">What's your cancellation policy?</h3>
                 <p class="faq-answer">We require 24 hours notice for cancellations. If you need to reschedule, contact us as soon as possible and we'll do our best to accommodate your new date.</p>
             </div>
-            <div class="faq-item">
+            <div class="faq-item" data-category="services">
                 <h3 class="faq-question">Do you offer makeup lessons?</h3>
                 <p class="faq-answer">Yes! We offer personalized makeup lessons where we teach you our techniques. Perfect for learning professional makeup application skills. Contact us for pricing.</p>
             </div>
@@ -2064,7 +2624,10 @@
     </footer>
 
     <script>
-        const API_URL = 'http://localhost:3000/api';
+        // Detect API URL based on environment
+        const API_URL = window.location.hostname === 'localhost'
+            ? 'http://localhost:3000/api'
+            : `${window.location.protocol}//${window.location.host}/api`;
 
         function validateName() {
             const nameInput = document.getElementById('name');
@@ -2629,6 +3192,84 @@
                 document.querySelectorAll('.service-card').forEach(card => {
                     card.style.animationDelay = '0s';
                 });
+            }
+        });
+
+        // ========== BEFORE & AFTER SLIDER ==========
+        function updateSlider(input) {
+            const slider = input.closest('.before-after-slider');
+            const afterImg = slider.querySelector('[class*="after"]');
+            const percentage = input.value;
+
+            if (afterImg) {
+                afterImg.style.clipPath = `inset(0 0 0 ${100 - percentage}%)`;
+            }
+
+            const thumb = input;
+            const thumbPosition = (percentage / 100) * slider.offsetWidth;
+            input.style.left = thumbPosition + 'px';
+        }
+
+        // Initialize before/after sliders
+        document.addEventListener('DOMContentLoaded', () => {
+            const sliders = document.querySelectorAll('.before-after-slider-handle');
+            sliders.forEach(slider => {
+                updateSlider(slider);
+            });
+        });
+
+        // ========== FAQ SEARCH & FILTER ==========
+        function filterFAQ() {
+            const searchTerm = document.getElementById('faqSearch').value.toLowerCase();
+            const faqItems = document.querySelectorAll('.faq-item');
+
+            faqItems.forEach(item => {
+                const question = item.querySelector('.faq-question').textContent.toLowerCase();
+                const answer = item.querySelector('.faq-answer').textContent.toLowerCase();
+
+                if (question.includes(searchTerm) || answer.includes(searchTerm)) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+        }
+
+        function filterByCategory(category) {
+            const faqItems = document.querySelectorAll('.faq-item');
+            const filterBtns = document.querySelectorAll('.faq-filter-btn');
+
+            filterBtns.forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            event.target.classList.add('active');
+
+            faqItems.forEach(item => {
+                if (category === 'all') {
+                    item.classList.remove('hidden');
+                } else {
+                    const itemCategory = item.dataset.category;
+                    if (itemCategory === category) {
+                        item.classList.remove('hidden');
+                    } else {
+                        item.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        // Add navigation link for pricing section
+        document.addEventListener('DOMContentLoaded', () => {
+            const navContainer = document.querySelector('.nav-links');
+            if (navContainer) {
+                const pricingLink = document.createElement('li');
+                pricingLink.innerHTML = '<a href="#pricing">Pricing</a>';
+
+                const faqLink = navContainer.querySelector('a[href="#faq"]');
+                if (faqLink) {
+                    faqLink.parentElement.parentElement.insertBefore(pricingLink, faqLink.parentElement);
+                }
             }
         });
     </script>
