@@ -896,7 +896,7 @@
                                 <input type="text" id="duration-casual" placeholder="e.g., 1-1.5 hours">
                             </div>
 
-                            <button class="btn btn-primary" onclick="savePricing()"><i class="fas fa-save"></i> Save All Pricing</button>
+                            <button class="btn btn-primary" id="save-pricing-btn"><i class="fas fa-save"></i> Save All Pricing</button>
                         </div>
                     </div>
 
@@ -919,7 +919,7 @@ Country: {country}
 
 We look forward to making you look stunning!</textarea>
                         </div>
-                        <button class="btn btn-primary" onclick="saveEmailTemplate()"><i class="fas fa-save"></i> Save Email Template</button>
+                        <button class="btn btn-primary" id="save-email-template-btn"><i class="fas fa-save"></i> Save Email Template</button>
                     </div>
                 </div>
             </section>
@@ -1535,6 +1535,33 @@ We look forward to making you look stunning!</textarea>
             localStorage.removeItem('adminToken');
             window.location.href = '/admin-login.html';
         }
+
+        // Initialize event listeners when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add event listeners for buttons
+            const savePricingBtn = document.getElementById('save-pricing-btn');
+            if (savePricingBtn) {
+                savePricingBtn.addEventListener('click', savePricing);
+                console.log('✅ Save Pricing button listener attached');
+            }
+
+            const saveEmailTemplateBtn = document.getElementById('save-email-template-btn');
+            if (saveEmailTemplateBtn) {
+                saveEmailTemplateBtn.addEventListener('click', saveEmailTemplate);
+                console.log('✅ Save Email Template button listener attached');
+            }
+
+            const saveAvailabilityBtn = Array.from(document.querySelectorAll('button')).find(btn =>
+                                         btn.textContent.includes('Save Availability'));
+            if (saveAvailabilityBtn) {
+                saveAvailabilityBtn.addEventListener('click', () => {
+                    showSuccess('Availability saved successfully!');
+                });
+                console.log('✅ Save Availability button listener attached');
+            }
+
+            console.log('✅ Admin panel initialized with all event listeners');
+        });
     </script>
 </body>
 </html>

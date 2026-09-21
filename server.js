@@ -1621,12 +1621,14 @@ app.delete('/api/admin/users/:userId', verifyAdminToken, requireRole('admin'), a
 app.get('/api/services', async (req, res) => {
   try {
     if (!MONGO_URI || mongoose.connection.readyState !== 1) {
-      // Return default pricing if database not available
-      return res.json({ success: true, services: [
-        { name: 'bridal', price: 25000, description: 'Professional bridal makeup', duration: '2-3 hours' },
-        { name: 'party', price: 15000, description: 'Glamorous party makeup', duration: '1.5-2 hours' },
-        { name: 'casual', price: 10000, description: 'Natural everyday makeup', duration: '1-1.5 hours' }
-      ]});
+      // Return cached pricing if database not available (allows in-memory updates)
+      const cachedServices = Object.values(servicesCache).map(s => ({
+        name: s.name,
+        price: s.price,
+        description: s.description,
+        duration: s.duration
+      }));
+      return res.json({ success: true, services: cachedServices });
     }
 
     const services = await Service.find({}, '-_id name price description duration').sort({ name: 1 });
@@ -1641,8 +1643,17 @@ app.get('/api/services', async (req, res) => {
 app.get('/api/services/:name', async (req, res) => {
   try {
     if (!MONGO_URI || mongoose.connection.readyState !== 1) {
-      const defaults = { bridal: 25000, party: 15000, casual: 10000 };
-      return res.json({ success: true, service: { name: req.params.name, price: defaults[req.params.name] || 0 }});
+      // Return cached pricing if database not available
+      const cached = servicesCache[req.params.name];
+      if (!cached) {
+        return res.status(404).json({ success: false, message: 'Service not found' });
+      }
+      return res.json({ success: true, service: {
+        name: cached.name,
+        price: cached.price,
+        description: cached.description,
+        duration: cached.duration
+      }});
     }
 
     const service = await Service.findOne({ name: req.params.name }, '-_id name price description duration');
@@ -1657,20 +1668,41 @@ app.get('/api/services/:name', async (req, res) => {
 });
 
 // Update service pricing (admin only)
+// In-memory service storage for development (without MongoDB)
+let servicesCache = {
+  bridal: { name: 'bridal', price: 25000, description: 'Professional bridal makeup with full coverage and long-lasting finish', duration: '2-3 hours' },
+  party: { name: 'party', price: 15000, description: 'Glamorous party makeup for special occasions', duration: '1.5-2 hours' },
+  casual: { name: 'casual', price: 10000, description: 'Natural everyday makeup look', duration: '1-1.5 hours' }
+};
+
 app.patch('/api/admin/services/:name', verifyAdminToken, async (req, res) => {
   try {
     const { name } = req.params;
     const { price, description, duration } = req.body;
-
-    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
-      return res.status(400).json({ success: false, message: 'Database required' });
-    }
+    const adminUsername = req.user?.username || 'admin';
 
     // Validate input
     if (price !== undefined && (typeof price !== 'number' || price < 0)) {
       return res.status(400).json({ success: false, message: 'Price must be a non-negative number' });
     }
 
+    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
+      // Development mode: Update in-memory cache
+      if (!servicesCache[name]) {
+        return res.status(404).json({ success: false, message: 'Service not found' });
+      }
+
+      const updateData = { ...servicesCache[name], updatedAt: new Date() };
+      if (price !== undefined) updateData.price = price;
+      if (description !== undefined) updateData.description = description;
+      if (duration !== undefined) updateData.duration = duration;
+
+      servicesCache[name] = updateData;
+      log('INFO', `Service pricing updated (in-memory): ${name} - ₦${updateData.price}`, { admin: adminUsername });
+      return res.json({ success: true, message: 'Service updated (in-memory)', service: updateData });
+    }
+
+    // Production mode: Update in database
     const updateData = { updatedAt: new Date() };
     if (price !== undefined) updateData.price = price;
     if (description !== undefined) updateData.description = description;
@@ -1686,7 +1718,7 @@ app.patch('/api/admin/services/:name', verifyAdminToken, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Service not found' });
     }
 
-    log('INFO', `Service pricing updated: ${name} - ₦${service.price}`, { admin: req.admin.username });
+    log('INFO', `Service pricing updated: ${name} - ₦${service.price}`, { admin: adminUsername });
     res.json({ success: true, message: 'Service updated', service });
   } catch (error) {
     log('ERROR', 'Update service error:', error.message);
