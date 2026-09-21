@@ -1853,8 +1853,12 @@ app.get('/', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  log('INFO', `Server listening on http://localhost:${PORT}`);
+const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+app.listen(PORT, '0.0.0.0', () => {
+  const url = process.env.NODE_ENV === 'production'
+    ? `Port ${PORT}`
+    : `http://localhost:${PORT}`;
+  log('INFO', `Server listening on ${url}`);
 });
 
 // ========== PHASE 3: IMPROVED ERROR HANDLING MIDDLEWARE ==========
