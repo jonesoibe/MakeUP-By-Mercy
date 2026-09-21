@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: makeup-by-mercy
+    runtime: node
+    runtimeVersion: 18.16.0
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: MONGODB_URI
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+      - key: OWNER_EMAIL
+        sync: false
+
+databases:
+  - name: makeup-mercy-db
+    databaseName: makeup_mercy
+    user: mongodb_user
