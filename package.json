@@ -1,0 +1,26 @@
+{
+  "name": "makeup-by-mercy-booking",
+  "version": "1.0.0",
+  "description": "Booking system for MakeUP By Mercy",
+  "main": "server.js",
+  "engines": {
+    "node": "18.x",
+    "npm": "9.x"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["makeup", "booking", "salon"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2",
+    "nodemailer": "^6.9.3",
+    "dotenv": "^16.0.3",
+    "mongoose": "^7.0.0"
+  }
+}
+

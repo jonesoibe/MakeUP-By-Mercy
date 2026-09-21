@@ -1,0 +1,1616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MakeUP By Mercy - Book Your Perfect Makeup Look</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* NAVIGATION */
+        nav {
+            background-color: #f2ebf2;
+            padding: 15px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 400px;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #cc3380;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 30px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: #4d4d4d;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: #cc3380;
+        }
+
+        /* HERO SECTION */
+        .hero {
+            background: linear-gradient(135deg, #f2d9e5 0%, #f2ebf2 100%);
+            padding: 60px 80px;
+            text-align: left;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            color: #cc3380;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .hero p {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 20px;
+            max-width: 600px;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background-color: #cc3380;
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+        }
+
+        .cta-button:hover {
+            background-color: #b3297e;
+            transform: translateY(-2px);
+        }
+
+        .cta-button:active {
+            transform: translateY(0);
+        }
+
+        /* SERVICES SECTION */
+        .services {
+            padding: 60px 40px;
+            background-color: white;
+        }
+
+        .services h2 {
+            font-size: 36px;
+            color: #cc3380;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .service-card {
+            background-color: #faf2f7;
+            border: 1px solid #e5d9e5;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .service-image {
+            width: 100%;
+            height: 220px;
+            object-fit: cover;
+        }
+
+        .service-content {
+            padding: 25px;
+            flex: 1;
+        }
+
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(204, 51, 128, 0.15);
+        }
+
+        .service-card h3 {
+            font-size: 20px;
+            color: #cc3380;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .service-card p {
+            font-size: 14px;
+            color: #808080;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+
+        /* BOOKING SECTION */
+        .booking {
+            background-color: #f2ebf2;
+            padding: 60px 80px;
+        }
+
+        .booking h2 {
+            font-size: 36px;
+            color: #cc3380;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+
+        .booking-form {
+            max-width: 500px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 12px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            color: #4d4d4d;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #cc3380;
+            box-shadow: 0 0 0 3px rgba(204, 51, 128, 0.1);
+        }
+
+        .form-submit {
+            width: 100%;
+            padding: 15px;
+            background-color: #cc3380;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            margin-top: 20px;
+        }
+
+        .form-submit:hover {
+            background-color: #b3297e;
+            transform: translateY(-2px);
+        }
+
+        .form-submit:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* VALIDATION STYLES */
+        .required-indicator {
+            color: #ff0000;
+            font-weight: bold;
+            margin-left: 3px;
+        }
+
+        .error-message {
+            color: #ff0000;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .form-group.error input,
+        .form-group.error select {
+            border-color: #ff0000;
+            background-color: #fff5f5;
+        }
+
+        .form-group.error input:focus,
+        .form-group.error select:focus {
+            border-color: #ff0000;
+            box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.1);
+        }
+
+        .form-group.success input,
+        .form-group.success select {
+            border-color: #4CAF50;
+            background-color: #f5fff5;
+        }
+
+        .success-message {
+            color: #4CAF50;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        /* FOOTER */
+        footer {
+            background-color: #333;
+            color: #ccc;
+            padding: 15px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .social-links {
+            display: flex;
+            gap: 20px;
+            list-style: none;
+        }
+
+        .social-links a {
+            color: #cc3380;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .social-links a:hover {
+            color: #ff69b4;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            nav {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .nav-links {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .hero {
+                padding: 40px 20px;
+            }
+
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .hero p {
+                font-size: 16px;
+            }
+
+            .services {
+                padding: 40px 20px;
+            }
+
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .booking {
+                padding: 40px 20px;
+            }
+
+            .booking-form {
+                max-width: 100%;
+            }
+
+            footer {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .social-links {
+                justify-content: center;
+            }
+
+            .portfolio-container {
+                grid-template-columns: 1fr;
+            }
+
+            .phone-frame {
+                width: 220px;
+                height: 440px;
+            }
+
+            .testimonials-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .faq-container {
+                width: 100%;
+            }
+
+            .faq-item {
+                margin-bottom: 20px;
+                padding: 20px;
+            }
+
+            .contact-container {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+        }
+
+        /* PORTFOLIO SECTION */
+        .portfolio {
+            padding: 60px 40px;
+            background-color: white;
+        }
+
+        .portfolio h2 {
+            font-size: 36px;
+            color: #cc3380;
+            margin-bottom: 50px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .portfolio-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .portfolio-text h3 {
+            font-size: 28px;
+            color: #cc3380;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .portfolio-text p {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .portfolio-features {
+            list-style: none;
+        }
+
+        .portfolio-features li {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .portfolio-features li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #cc3380;
+        }
+
+        .phone-mockup {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .phone-frame {
+            position: relative;
+            width: 280px;
+            height: 560px;
+            background: #1a1a1a;
+            border-radius: 40px;
+            padding: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            animation: bounce 2s ease infinite;
+        }
+
+        .phone-notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 28px;
+            background: #1a1a1a;
+            border-radius: 0 0 30px 30px;
+            z-index: 10;
+        }
+
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: #f2ebf2;
+            border-radius: 35px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .gallery-slide {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+            font-weight: bold;
+            opacity: 0;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .gallery-slide:nth-child(1) {
+            background-image: url('Pictures/shamblen-studios-xwM61TPMlYk-unsplash.jpg');
+            animation: slideShowImage 9s infinite;
+        }
+
+        .gallery-slide:nth-child(2) {
+            background-image: url('Pictures/lola-azizada-wg8HByI517M-unsplash.jpg');
+            animation: slideShowImage 9s infinite 3s;
+        }
+
+        .gallery-slide:nth-child(3) {
+            background-image: url('Pictures/peter-kalonji-LH74lRYvBY4-unsplash.jpg');
+            animation: slideShowImage 9s infinite 6s;
+        }
+
+        @keyframes slideShowImage {
+            0% { opacity: 1; }
+            33% { opacity: 1; }
+            34% { opacity: 0; }
+            100% { opacity: 0; }
+        }
+
+        .gallery-counter {
+            font-size: 14px;
+            color: #999;
+            animation: fadeIn 0.8s ease;
+        }
+
+        /* TESTIMONIALS SECTION */
+        .testimonials {
+            padding: 60px 40px;
+            background-color: #f2ebf2;
+        }
+
+        .testimonials h2 {
+            font-size: 36px;
+            color: #cc3380;
+            margin-bottom: 50px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .testimonials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .testimonial-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(204, 51, 128, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .testimonial-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(204, 51, 128, 0.2);
+        }
+
+        .stars {
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+
+        .stars i {
+            color: #cc3380;
+            margin-right: 5px;
+        }
+
+        .testimonial-text {
+            font-size: 16px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+
+        .testimonial-author {
+            font-weight: bold;
+            color: #cc3380;
+            margin-bottom: 5px;
+        }
+
+        .testimonial-occasion {
+            font-size: 14px;
+            color: #999;
+        }
+
+        /* FAQ SECTION */
+        .faq {
+            padding: 60px 40px;
+            background-color: white;
+        }
+
+        .faq h2 {
+            font-size: 36px;
+            color: #cc3380;
+            margin-bottom: 50px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .faq-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .faq-item {
+            margin-bottom: 30px;
+            padding: 25px;
+            background: #f2ebf2;
+            border-radius: 10px;
+            border-left: 4px solid #cc3380;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .faq-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 15px rgba(204, 51, 128, 0.15);
+        }
+
+        .faq-question {
+            color: #cc3380;
+            font-size: 18px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .faq-answer {
+            color: #666;
+            line-height: 1.6;
+            font-size: 15px;
+        }
+
+        /* CONTACT SECTION */
+        .contact {
+            padding: 60px 40px;
+            background: linear-gradient(135deg, #f2ebf2 0%, #ffd9e5 100%);
+        }
+
+        .contact h2 {
+            font-size: 36px;
+            color: #cc3380;
+            margin-bottom: 50px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .contact-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .contact-info h3,
+        .social-section h3 {
+            font-size: 24px;
+            color: #cc3380;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .contact-description {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 15px;
+        }
+
+        .contact-method {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            border-left: 4px solid #cc3380;
+        }
+
+        .contact-method h4 {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .contact-link {
+            display: inline-block;
+            font-size: 18px;
+            color: #cc3380;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        .contact-link:hover {
+            color: #ff69b4;
+            text-decoration: underline;
+        }
+
+        .contact-subtext {
+            font-size: 13px;
+            color: #999;
+            margin-top: 8px;
+        }
+
+        .social-buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .social-btn {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border-left: 4px solid #cc3380;
+        }
+
+        .social-btn:hover {
+            transform: translateX(5px);
+            box-shadow: 0 8px 20px rgba(204, 51, 128, 0.2);
+        }
+
+        .social-icon {
+            font-size: 32px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .instagram .social-icon {
+            color: #E1306C;
+        }
+
+        .tiktok .social-icon {
+            color: #000000;
+        }
+
+        .whatsapp .social-icon {
+            color: #25D366;
+        }
+
+        .social-btn > div,
+        .social-name,
+        .social-handle {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .social-name {
+            font-size: 16px;
+            color: #333;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .social-handle {
+            font-size: 14px;
+            color: #cc3380;
+            font-weight: 600;
+        }
+
+        /* ANIMATIONS */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: -1000px 0;
+            }
+            100% {
+                background-position: 1000px 0;
+            }
+        }
+
+        nav {
+            animation: slideInDown 0.6s ease;
+        }
+
+        .hero {
+            animation: fadeIn 0.8s ease;
+        }
+
+        .hero h1 {
+            animation: slideInUp 0.8s ease 0.2s backwards;
+        }
+
+        .hero p {
+            animation: slideInUp 0.8s ease 0.4s backwards;
+        }
+
+        .cta-button {
+            animation: slideInUp 0.8s ease 0.6s backwards;
+        }
+
+        .cta-button:hover {
+            animation: bounce 0.6s ease infinite;
+        }
+
+        .services {
+            animation: fadeIn 0.8s ease 0.2s backwards;
+        }
+
+        .services h2 {
+            animation: slideInUp 0.6s ease;
+        }
+
+        .service-card {
+            animation: slideInUp 0.6s ease;
+            opacity: 0;
+        }
+
+        .service-card:nth-child(1) {
+            animation: slideInUp 0.6s ease 0.2s forwards;
+        }
+
+        .service-card:nth-child(2) {
+            animation: slideInUp 0.6s ease 0.4s forwards;
+        }
+
+        .service-card:nth-child(3) {
+            animation: slideInUp 0.6s ease 0.6s forwards;
+        }
+
+        .booking {
+            animation: fadeIn 0.8s ease 0.4s backwards;
+        }
+
+        .booking h2 {
+            animation: slideInUp 0.6s ease;
+        }
+
+        .booking-form {
+            animation: slideInUp 0.6s ease 0.2s backwards;
+        }
+
+        footer {
+            animation: slideInUp 0.6s ease;
+        }
+
+        /* CONFIRMATION MODAL */
+        .confirmation-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .confirmation-modal.show {
+            display: flex;
+        }
+
+        .confirmation-content {
+            background: white;
+            border-radius: 20px;
+            padding: 50px 40px;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideInUp 0.5s ease;
+        }
+
+        .confirmation-icon {
+            font-size: 80px;
+            color: #4CAF50;
+            margin-bottom: 20px;
+            animation: scaleIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .confirmation-title {
+            font-size: 28px;
+            color: #27ae60;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        .booking-number {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+            letter-spacing: 2px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .confirmation-details {
+            background: #e8f5e9;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.8;
+        }
+
+        .confirmation-details p {
+            margin: 8px 0;
+            color: #1b5e20;
+        }
+
+        .confirmation-label {
+            font-weight: bold;
+            color: #27ae60;
+        }
+
+        .confirmation-message {
+            color: #666;
+            margin: 20px 0;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .confirmation-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+
+        .btn-close-confirmation {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-close-confirmation:hover {
+            background-color: #1e8449;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+        }
+
+        .btn-copy-id {
+            background-color: #f0f0f0;
+            color: #27ae60;
+            border: 2px solid #27ae60;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-copy-id:hover {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        @keyframes scaleIn {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.1);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- NAVIGATION -->
+    <nav>
+        <a href="#" class="logo">MakeUP By Mercy</a>
+        <ul class="nav-links">
+            <li><a href="#services">Services</a></li>
+            <li><a href="#portfolio">Portfolio</a></li>
+            <li><a href="#booking">Book Now</a></li>
+            <li><a href="#contact">Contact</a></li>
+        </ul>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="hero">
+        <h1>Book Your Perfect Makeup Look</h1>
+        <p>Professional makeup artist ready to make you look stunning for any occasion</p>
+        <a href="#booking" class="cta-button">Book Now</a>
+    </section>
+
+    <!-- SERVICES SECTION -->
+    <section class="services" id="services">
+        <h2>Our Services</h2>
+        <div class="services-grid">
+            <div class="service-card">
+                <img src="Pictures/peter-kalonji-LH74lRYvBY4-unsplash.jpg" alt="Bridal Makeup" class="service-image">
+                <div class="service-content">
+                    <h3>Bridal Makeup</h3>
+                    <p>Professional makeup artist specializing in bridal makeup. We create the perfect look for your special day with precision and care.</p>
+                </div>
+            </div>
+            <div class="service-card">
+                <img src="Pictures/amir-seilsepour-_hAaFD1ucfk-unsplash.jpg" alt="Party Makeup" class="service-image">
+                <div class="service-content">
+                    <h3>Party Makeup</h3>
+                    <p>Professional makeup artist specializing in party makeup. Glamorous looks for all your celebrations and special events.</p>
+                </div>
+            </div>
+            <div class="service-card">
+                <img src="Pictures/lola-azizada-I3y-aJ4DWng-unsplash.jpg" alt="Casual Makeup" class="service-image">
+                <div class="service-content">
+                    <h3>Casual Makeup</h3>
+                    <p>Professional makeup artist specializing in casual makeup. Everyday looks that enhance your natural beauty effortlessly.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PORTFOLIO SECTION -->
+    <section class="portfolio" id="portfolio">
+        <h2>Our Work</h2>
+        <div class="portfolio-container">
+            <div class="portfolio-text">
+                <h3>Professional Results</h3>
+                <p>See the transformation we create for our clients</p>
+                <ul class="portfolio-features">
+                    <li>Bridal Makeup Expertise</li>
+                    <li>Party & Event Looks</li>
+                    <li>Color Theory Mastery</li>
+                    <li>Camera-Ready Makeup</li>
+                    <li>Long-Lasting Formulas</li>
+                </ul>
+            </div>
+            <div class="phone-mockup">
+                <div class="phone-frame">
+                    <div class="phone-notch"></div>
+                    <div class="phone-screen">
+                        <div class="gallery-slide slide-1"></div>
+                        <div class="gallery-slide slide-2"></div>
+                        <div class="gallery-slide slide-3"></div>
+                    </div>
+                </div>
+                <div class="gallery-counter">1 / 3</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- TESTIMONIALS SECTION -->
+    <section class="testimonials" id="testimonials">
+        <h2>What Our Clients Say</h2>
+        <div class="testimonials-grid">
+            <div class="testimonial-card">
+                <div class="stars"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
+                <p class="testimonial-text">"The makeup was absolutely flawless! Sarah made me feel beautiful and confident on my wedding day. Highly recommend!"</p>
+                <p class="testimonial-author">— Jennifer M.</p>
+                <p class="testimonial-occasion">Bridal Makeup</p>
+            </div>
+            <div class="testimonial-card">
+                <div class="stars"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
+                <p class="testimonial-text">"Best makeup experience ever! The makeup lasted all night at my party and I got so many compliments. Worth every penny!"</p>
+                <p class="testimonial-author">— Amina K.</p>
+                <p class="testimonial-occasion">Party Makeup</p>
+            </div>
+            <div class="testimonial-card">
+                <div class="stars"><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i></div>
+                <p class="testimonial-text">"Professional, friendly, and talented! Sarah really understands what works for different skin tones. Perfect for my event!"</p>
+                <p class="testimonial-author">— Lisa T.</p>
+                <p class="testimonial-occasion">Professional Event</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ SECTION -->
+    <section class="faq" id="faq">
+        <h2>Frequently Asked Questions</h2>
+        <div class="faq-container">
+            <div class="faq-item">
+                <h3 class="faq-question">How long does a makeup session take?</h3>
+                <p class="faq-answer">A typical makeup session takes 45-60 minutes depending on the style. Bridal makeup takes slightly longer (60-90 minutes) to ensure perfection. We'll confirm the exact timing when you book.</p>
+            </div>
+            <div class="faq-item">
+                <h3 class="faq-question">Do you offer travel services?</h3>
+                <p class="faq-answer">Yes! We offer travel services for events and occasions. Please mention your location when booking, and we'll confirm availability and any travel fees.</p>
+            </div>
+            <div class="faq-item">
+                <h3 class="faq-question">What products do you use?</h3>
+                <p class="faq-answer">We use professional-grade, high-quality makeup products that are long-lasting, cruelty-free, and hypoallergenic. All products are suitable for all skin types.</p>
+            </div>
+            <div class="faq-item">
+                <h3 class="faq-question">Can I request a specific makeup style?</h3>
+                <p class="faq-answer">Absolutely! We love custom requests. Feel free to share photos, inspiration, or describe your ideal look when you book. We'll work with you to create the perfect makeup.</p>
+            </div>
+            <div class="faq-item">
+                <h3 class="faq-question">What's your cancellation policy?</h3>
+                <p class="faq-answer">We require 24 hours notice for cancellations. If you need to reschedule, contact us as soon as possible and we'll do our best to accommodate your new date.</p>
+            </div>
+            <div class="faq-item">
+                <h3 class="faq-question">Do you offer makeup lessons?</h3>
+                <p class="faq-answer">Yes! We offer personalized makeup lessons where we teach you our techniques. Perfect for learning professional makeup application skills. Contact us for pricing.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- BOOKING SECTION -->
+    <section class="booking" id="booking">
+        <h2>Ready to Book?</h2>
+        <form class="booking-form" id="bookingForm" onsubmit="handleBooking(event)">
+            <div class="form-group">
+                <label for="name">Full Name <span class="required-indicator">*</span></label>
+                <input type="text" id="name" name="name" placeholder="Your Name" onblur="validateName()" oninput="validateName()">
+                <div class="error-message" id="nameError"></div>
+            </div>
+            <div class="form-group">
+                <label for="email">Email <span class="required-indicator">*</span></label>
+                <input type="text" id="email" name="email" placeholder="your@email.com" onblur="validateEmail()" oninput="validateEmail()">
+                <div class="error-message" id="emailError"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="country">Country <span class="required-indicator">*</span></label>
+                    <select id="country" name="country" onchange="validatePhone()">
+                        <option value="Nigeria">🇳🇬 Nigeria</option>
+                        <option value="Ghana">🇬🇭 Ghana</option>
+                        <option value="Kenya">🇰🇪 Kenya</option>
+                        <option value="South Africa">🇿🇦 South Africa</option>
+                        <option value="United Kingdom">🇬🇧 United Kingdom</option>
+                        <option value="United States">🇺🇸 United States</option>
+                        <option value="Canada">🇨🇦 Canada</option>
+                        <option value="Australia">🇦🇺 Australia</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone Number <span class="required-indicator">*</span></label>
+                    <input type="tel" id="phone" name="phone" placeholder="Enter phone number" onblur="validatePhone()" oninput="validatePhone()">
+                    <div class="error-message" id="phoneError"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="service">Service <span class="required-indicator">*</span></label>
+                <select id="service" name="service" onchange="validateService()">
+                    <option value="">Select a service</option>
+                    <option value="bridal">Bridal Makeup</option>
+                    <option value="party">Party Makeup</option>
+                    <option value="casual">Casual Makeup</option>
+                </select>
+                <div class="error-message" id="serviceError"></div>
+            </div>
+            <div class="form-group">
+                <label for="date">Preferred Date <span class="required-indicator">*</span></label>
+                <input type="date" id="date" name="date" onchange="validateDate()">
+                <div class="error-message" id="dateError"></div>
+            </div>
+            <button type="submit" class="form-submit" id="submitBtn">Book Appointment</button>
+        </form>
+    </section>
+
+    <!-- CONTACT SECTION -->
+    <section class="contact" id="contact">
+        <h2>Get In Touch</h2>
+        <div class="contact-container">
+            <div class="contact-info">
+                <h3>Contact Information</h3>
+                <p class="contact-description">Reach out to us for bookings, inquiries, or special requests</p>
+
+                <div class="contact-method">
+                    <h4>Phone / WhatsApp</h4>
+                    <a href="tel:+2348132168881" class="contact-link">
+                        +234 813 216 8881
+                    </a>
+                    <p class="contact-subtext">Available Mon-Sun, 9AM-8PM</p>
+                </div>
+
+                <div class="contact-method">
+                    <h4>Email</h4>
+                    <a href="mailto:makeupbymercy@email.com" class="contact-link">
+                        Book your appointment
+                    </a>
+                    <p class="contact-subtext">Or use the booking form below</p>
+                </div>
+
+                <div class="contact-method">
+                    <h4>Location</h4>
+                    <p class="contact-link">Available for home and event services</p>
+                </div>
+            </div>
+
+            <div class="social-section">
+                <h3>Follow Us</h3>
+                <p class="contact-description">Connect with us on social media for makeup inspiration</p>
+
+                <div class="social-buttons">
+                    <a href="https://instagram.com/MakeupbymercyIjeh" target="_blank" class="social-btn instagram">
+                        <i class="fab fa-instagram social-icon"></i>
+                        <span class="social-name">Instagram</span>
+                        <span class="social-handle">@MakeupbymercyIjeh</span>
+                    </a>
+
+                    <a href="https://tiktok.com/@MakeupbymercyIjeh" target="_blank" class="social-btn tiktok">
+                        <i class="fab fa-tiktok social-icon"></i>
+                        <span class="social-name">TikTok</span>
+                        <span class="social-handle">@MakeupbymercyIjeh</span>
+                    </a>
+
+                    <a href="https://wa.me/2348132168881" target="_blank" class="social-btn whatsapp">
+                        <i class="fab fa-whatsapp social-icon"></i>
+                        <span class="social-name">WhatsApp</span>
+                        <span class="social-handle">08132168881</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <p>&copy; 2024 MakeUP By Mercy. All rights reserved.</p>
+        <ul class="social-links">
+            <li><a href="https://instagram.com" target="_blank">Instagram</a></li>
+            <li><a href="https://facebook.com" target="_blank">Facebook</a></li>
+            <li><a href="https://twitter.com" target="_blank">Twitter</a></li>
+        </ul>
+    </footer>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+
+        function validateName() {
+            const nameInput = document.getElementById('name');
+            const nameError = document.getElementById('nameError');
+            const formGroup = nameInput.closest('.form-group');
+            const value = nameInput.value.trim();
+
+            if (value.length < 2) {
+                nameError.textContent = 'Name must be at least 2 characters';
+                nameError.classList.add('show');
+                formGroup.classList.add('error');
+                formGroup.classList.remove('success');
+                return false;
+            } else {
+                nameError.classList.remove('show');
+                formGroup.classList.remove('error');
+                return true;
+            }
+        }
+
+        function validateEmail() {
+            const emailInput = document.getElementById('email');
+            const emailError = document.getElementById('emailError');
+            const formGroup = emailInput.closest('.form-group');
+            const value = emailInput.value.trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            if (!emailRegex.test(value)) {
+                emailError.textContent = 'Please enter a valid email (e.g., user@example.com)';
+                emailError.classList.add('show');
+                formGroup.classList.add('error');
+                formGroup.classList.remove('success');
+                return false;
+            } else {
+                emailError.classList.remove('show');
+                formGroup.classList.remove('error');
+                return true;
+            }
+        }
+
+        function validatePhone() {
+            const phoneInput = document.getElementById('phone');
+            const phoneError = document.getElementById('phoneError');
+            const formGroup = phoneInput.closest('.form-row');
+            const value = phoneInput.value.trim();
+
+            if (value.length < 7) {
+                phoneError.textContent = 'Please enter a valid phone number';
+                phoneError.classList.add('show');
+                if (formGroup) formGroup.classList.add('error');
+                if (formGroup) formGroup.classList.remove('success');
+                return false;
+            } else {
+                phoneError.classList.remove('show');
+                if (formGroup) formGroup.classList.remove('error');
+                return true;
+            }
+        }
+
+        function validateService() {
+            const serviceSelect = document.getElementById('service');
+            const serviceError = document.getElementById('serviceError');
+            const formGroup = serviceSelect.closest('.form-group');
+            const value = serviceSelect.value;
+
+            if (!value || value === '') {
+                serviceError.textContent = 'Please select a service';
+                serviceError.classList.add('show');
+                formGroup.classList.add('error');
+                formGroup.classList.remove('success');
+                return false;
+            } else {
+                serviceError.classList.remove('show');
+                formGroup.classList.remove('error');
+                return true;
+            }
+        }
+
+        function validateDate() {
+            const dateInput = document.getElementById('date');
+            const dateError = document.getElementById('dateError');
+            const formGroup = dateInput.closest('.form-group');
+            const value = dateInput.value;
+
+            if (!value) {
+                dateError.textContent = 'Please select a date';
+                dateError.classList.add('show');
+                formGroup.classList.add('error');
+                formGroup.classList.remove('success');
+                return false;
+            }
+
+            const selectedDate = new Date(value);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const maxDate = new Date();
+            maxDate.setFullYear(maxDate.getFullYear() + 1);
+
+            if (selectedDate < today) {
+                dateError.textContent = 'Please select a future date';
+                dateError.classList.add('show');
+                formGroup.classList.add('error');
+                formGroup.classList.remove('success');
+                return false;
+            } else if (selectedDate > maxDate) {
+                dateError.textContent = 'Bookings can only be made up to 1 year in advance';
+                dateError.classList.add('show');
+                formGroup.classList.add('error');
+                formGroup.classList.remove('success');
+                return false;
+            } else {
+                dateError.classList.remove('show');
+                formGroup.classList.remove('error');
+                return true;
+            }
+        }
+
+        async function handleBooking(event) {
+            event.preventDefault();
+
+            // Validate all fields
+            const isNameValid = validateName();
+            const isEmailValid = validateEmail();
+            const isPhoneValid = validatePhone();
+            const isServiceValid = validateService();
+            const isDateValid = validateDate();
+
+            if (!isNameValid || !isEmailValid || !isPhoneValid || !isServiceValid || !isDateValid) {
+                return;
+            }
+
+            const button = event.target.querySelector('button[type="submit"]');
+            const originalText = button.textContent;
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+            const country = document.getElementById('country').value;
+            const service = document.getElementById('service').value;
+            const date = document.getElementById('date').value;
+
+            // Disable button and show loading state
+            button.disabled = true;
+            button.textContent = 'Booking...';
+
+            try {
+                const response = await fetch(`${API_URL}/bookings`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        email: email,
+                        phone: phone,
+                        country: country,
+                        service: service,
+                        date: date
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Show custom confirmation modal
+                    showConfirmationModal(data.booking);
+
+                    // Reset form
+                    event.target.reset();
+
+                    // Clear all validation states
+                    document.querySelectorAll('.form-group').forEach(group => {
+                        group.classList.remove('error', 'success');
+                    });
+                    document.querySelectorAll('.error-message').forEach(msg => {
+                        msg.classList.remove('show');
+                    });
+
+                    button.textContent = 'Booking Confirmed!';
+                    button.style.backgroundColor = '#4CAF50';
+
+                    setTimeout(() => {
+                        button.textContent = originalText;
+                        button.style.backgroundColor = '';
+                        button.disabled = false;
+                    }, 3000);
+                } else {
+                    alert(`Error: ${data.message}`);
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            } catch (error) {
+                console.error('Booking error:', error);
+                alert(`Error: Unable to reach server. Make sure the server is running on http://localhost:3000`);
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Check if server is running on page load
+        async function checkServer() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                if (response.ok) {
+                    console.log('Connected to backend server');
+                }
+            } catch (error) {
+                console.warn('Backend server not running. Start it with: npm install && npm start');
+            }
+        }
+
+        // Check server connection when page loads
+        document.addEventListener('DOMContentLoaded', checkServer);
+
+        // Show confirmation modal
+        function showConfirmationModal(booking) {
+            const modal = document.getElementById('confirmationModal');
+            const bookingNumberEl = document.getElementById('bookingNumber');
+            const confirmationDetailsEl = document.getElementById('confirmationDetails');
+
+            bookingNumberEl.textContent = booking.bookingNumber;
+
+            const serviceDisplay = booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1');
+            const bookingDate = new Date(booking.date).toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            confirmationDetailsEl.innerHTML = `
+                <p><span class="confirmation-label">Name:</span> ${booking.name}</p>
+                <p><span class="confirmation-label">Phone:</span> ${booking.phone} (${booking.country})</p>
+                <p><span class="confirmation-label">Email:</span> ${booking.email}</p>
+                <p><span class="confirmation-label">Service:</span> ${serviceDisplay}</p>
+                <p><span class="confirmation-label">Date:</span> ${bookingDate}</p>
+            `;
+
+            modal.classList.add('show');
+        }
+
+        function closeConfirmationModal() {
+            const modal = document.getElementById('confirmationModal');
+            modal.classList.remove('show');
+        }
+
+        function copyBookingNumber() {
+            const bookingNumber = document.getElementById('bookingNumber').textContent;
+            navigator.clipboard.writeText(bookingNumber).then(() => {
+                alert('Booking number copied to clipboard!');
+            });
+        }
+    </script>
+
+    <!-- CONFIRMATION MODAL -->
+    <div id="confirmationModal" class="confirmation-modal">
+        <div class="confirmation-content">
+            <div class="confirmation-icon">✓</div>
+            <h2 class="confirmation-title">Booking Confirmed!</h2>
+            <p class="confirmation-message">
+                Your booking has been confirmed and confirmation emails have been sent to you and Mercy.
+            </p>
+
+            <div class="booking-number" id="bookingNumber">MKP-01001</div>
+
+            <div class="confirmation-details" id="confirmationDetails">
+                <p>Loading details...</p>
+            </div>
+
+            <p style="color: #999; font-size: 12px; margin-top: 15px;">
+                Save your booking number for future reference
+            </p>
+
+            <div class="confirmation-buttons">
+                <button class="btn-copy-id" onclick="copyBookingNumber()">
+                    <i class="fas fa-copy"></i> Copy ID
+                </button>
+                <button class="btn-close-confirmation" onclick="closeConfirmationModal(); document.getElementById('bookingForm').reset();">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
