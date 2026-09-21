@@ -504,6 +504,306 @@ app.delete('/api/bookings/:id', async (req, res) => {
   }
 });
 
+// ========== ADMIN AUTHENTICATION ==========
+const ADMIN_CREDENTIALS = {
+  username: 'admin',
+  password: 'admin123'
+};
+
+const adminTokens = new Set();
+
+function verifyAdminToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  }
+
+  const token = authHeader.substring(7);
+  if (!adminTokens.has(token)) {
+    return res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+
+  next();
+}
+
+// ========== ADMIN API ENDPOINTS ==========
+
+// Admin Login
+app.post('/api/admin/login', (req, res) => {
+  const { username, password } = req.body;
+
+  log('INFO', `Admin login attempt: ${username}`);
+
+  if (username === ADMIN_CREDENTIALS.username && password === ADMIN_CREDENTIALS.password) {
+    const token = require('crypto').randomBytes(32).toString('hex');
+    adminTokens.add(token);
+
+    log('SUCCESS', `Admin logged in: ${username}`);
+    res.json({ success: true, token });
+  } else {
+    log('WARN', `Failed admin login attempt: ${username}`);
+    res.status(401).json({ success: false, message: 'Invalid credentials' });
+  }
+});
+
+// Admin Dashboard
+app.get('/api/admin/dashboard', verifyAdminToken, async (req, res) => {
+  try {
+    let allBookings = bookings;
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      allBookings = await Booking.find();
+    }
+
+    const totalBookings = allBookings.length;
+    const confirmedBookings = allBookings.filter(b => b.status === 'confirmed').length;
+    const pendingBookings = allBookings.filter(b => b.status === 'pending').length;
+
+    // Calculate monthly revenue
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+    const monthlyBookings = allBookings.filter(b => {
+      const bookDate = new Date(b.date);
+      return bookDate.getMonth() === currentMonth && bookDate.getFullYear() === currentYear;
+    });
+    const monthlyRevenue = monthlyBookings.reduce((sum, b) => sum + (getPriceForService(b.service)), 0);
+
+    // Calculate repeat customers
+    const customerEmails = allBookings.map(b => b.email);
+    const repeatCustomers = customerEmails.filter((email, index) => customerEmails.indexOf(email) !== index).length;
+
+    res.json({
+      success: true,
+      totalBookings,
+      confirmedBookings,
+      pendingBookings,
+      monthlyRevenue,
+      repeatCustomers
+    });
+  } catch (error) {
+    log('ERROR', 'Error fetching dashboard data:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching dashboard data' });
+  }
+});
+
+// Get all bookings (admin)
+app.get('/api/admin/bookings', verifyAdminToken, async (req, res) => {
+  try {
+    let allBookings = bookings;
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      allBookings = await Booking.find().sort({ bookedAt: -1 });
+    }
+
+    res.json({
+      success: true,
+      bookings: allBookings,
+      database: MONGO_URI ? 'MongoDB' : 'In-Memory'
+    });
+  } catch (error) {
+    log('ERROR', 'Error fetching bookings:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching bookings' });
+  }
+});
+
+// Get upcoming appointments
+app.get('/api/admin/appointments/upcoming', verifyAdminToken, async (req, res) => {
+  try {
+    let allBookings = bookings;
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      allBookings = await Booking.find();
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nextWeek = new Date(today);
+    nextWeek.setDate(nextWeek.getDate() + 7);
+
+    const upcoming = allBookings
+      .filter(b => {
+        const bookDate = new Date(b.date);
+        return bookDate >= today && bookDate <= nextWeek && b.status !== 'cancelled';
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .slice(0, 10);
+
+    res.json({ success: true, appointments: upcoming });
+  } catch (error) {
+    log('ERROR', 'Error fetching upcoming appointments:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching appointments' });
+  }
+});
+
+// Get recent bookings
+app.get('/api/admin/bookings/recent', verifyAdminToken, async (req, res) => {
+  try {
+    let allBookings = bookings;
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      allBookings = await Booking.find().sort({ bookedAt: -1 }).limit(10);
+    } else {
+      allBookings = allBookings.sort((a, b) => new Date(b.bookedAt) - new Date(a.bookedAt)).slice(0, 10);
+    }
+
+    res.json({ success: true, bookings: allBookings });
+  } catch (error) {
+    log('ERROR', 'Error fetching recent bookings:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching bookings' });
+  }
+});
+
+// Confirm booking (admin)
+app.patch('/api/admin/bookings/:id/confirm', verifyAdminToken, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    let booking = null;
+
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      booking = await Booking.findByIdAndUpdate(bookingId, { status: 'confirmed' }, { new: true });
+    } else {
+      const booking_obj = bookings.find(b => b._id === bookingId);
+      if (booking_obj) {
+        booking_obj.status = 'confirmed';
+        booking = booking_obj;
+      }
+    }
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    log('SUCCESS', `Booking confirmed by admin: ${booking.bookingNumber}`);
+    res.json({ success: true, booking });
+  } catch (error) {
+    log('ERROR', 'Error confirming booking:', error.message);
+    res.status(500).json({ success: false, message: 'Error confirming booking' });
+  }
+});
+
+// Cancel booking (admin)
+app.patch('/api/admin/bookings/:id/cancel', verifyAdminToken, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    let booking = null;
+
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      booking = await Booking.findByIdAndUpdate(bookingId, { status: 'cancelled' }, { new: true });
+    } else {
+      const booking_obj = bookings.find(b => b._id === bookingId);
+      if (booking_obj) {
+        booking_obj.status = 'cancelled';
+        booking = booking_obj;
+      }
+    }
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    log('SUCCESS', `Booking cancelled by admin: ${booking.bookingNumber}`);
+    res.json({ success: true, booking });
+  } catch (error) {
+    log('ERROR', 'Error cancelling booking:', error.message);
+    res.status(500).json({ success: false, message: 'Error cancelling booking' });
+  }
+});
+
+// Send message to client
+app.post('/api/admin/bookings/:id/message', verifyAdminToken, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { message } = req.body;
+
+    let booking = bookings.find(b => b._id === bookingId);
+    if (!booking && MONGO_URI && mongoose.connection.readyState === 1) {
+      booking = await Booking.findById(bookingId);
+    }
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Send email to client
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: booking.email,
+      subject: `Message from MakeUP By Mercy - ${booking.bookingNumber}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Message from MakeUP By Mercy</h2>
+          <p>Hi ${booking.name},</p>
+          <p>${message}</p>
+          <p>Best regards,<br>MakeUP By Mercy Team</p>
+        </div>
+      `
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        log('ERROR', 'Error sending message:', error.message);
+      } else {
+        log('SUCCESS', `Message sent to ${booking.email}`);
+      }
+    });
+
+    res.json({ success: true, message: 'Message sent successfully' });
+  } catch (error) {
+    log('ERROR', 'Error sending message:', error.message);
+    res.status(500).json({ success: false, message: 'Error sending message' });
+  }
+});
+
+// Analytics
+app.get('/api/admin/analytics', verifyAdminToken, async (req, res) => {
+  try {
+    let allBookings = bookings;
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      allBookings = await Booking.find();
+    }
+
+    // Service breakdown
+    const serviceBreakdown = {
+      bridal: allBookings.filter(b => b.service === 'bridal').length,
+      party: allBookings.filter(b => b.service === 'party').length,
+      casual: allBookings.filter(b => b.service === 'casual').length
+    };
+
+    // Peak day
+    const dayCount = {};
+    allBookings.forEach(b => {
+      const day = new Date(b.date).toLocaleDateString('en-US', { weekday: 'long' });
+      dayCount[day] = (dayCount[day] || 0) + 1;
+    });
+    const peakDay = Object.keys(dayCount).reduce((a, b) => dayCount[a] > dayCount[b] ? a : b, 'Monday');
+
+    res.json({
+      success: true,
+      serviceBreakdown,
+      peakDay,
+      peakDayCount: dayCount[peakDay] || 0
+    });
+  } catch (error) {
+    log('ERROR', 'Error fetching analytics:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching analytics' });
+  }
+});
+
+// Helper function to get price for service
+function getPriceForService(service) {
+  const prices = {
+    bridal: 25000,
+    party: 15000,
+    casual: 10000
+  };
+  return prices[service] || 0;
+}
+
+// Serve admin pages
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+app.get('/admin-login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin-login.html'));
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'Server is running' });
