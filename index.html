@@ -1059,6 +1059,433 @@
                 opacity: 1;
             }
         }
+
+        /* HERO ANIMATIONS */
+        @keyframes heroTitleFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes heroTextFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes heroButtonPulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(204, 51, 128, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 15px rgba(204, 51, 128, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(204, 51, 128, 0);
+            }
+        }
+
+        .hero h1 {
+            animation: heroTitleFadeIn 0.8s ease-out;
+        }
+
+        .hero p {
+            animation: heroTextFadeIn 0.8s ease-out 0.2s both;
+        }
+
+        .cta-button {
+            animation: heroTextFadeIn 0.8s ease-out 0.4s both;
+            transition: all 0.3s ease;
+        }
+
+        .cta-button:hover {
+            animation: heroButtonPulse 1.5s infinite;
+        }
+
+        /* PARALLAX EFFECT */
+        .hero {
+            background-attachment: fixed;
+            background-position: center;
+            background-size: cover;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* SERVICES CARD ANIMATIONS */
+        @keyframes cardHoverLift {
+            from {
+                transform: translateY(0);
+            }
+            to {
+                transform: translateY(-15px);
+            }
+        }
+
+        @keyframes imageZoom {
+            from {
+                transform: scale(1);
+            }
+            to {
+                transform: scale(1.1);
+            }
+        }
+
+        @keyframes staggeredFadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .service-card {
+            animation: staggeredFadeInUp 0.6s ease-out forwards;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .service-card:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .service-card:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .service-card:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .service-card:hover {
+            transform: translateY(-15px);
+            box-shadow: 0 20px 40px rgba(204, 51, 128, 0.15);
+        }
+
+        .service-card img {
+            transition: transform 0.4s ease;
+            overflow: hidden;
+            border-radius: 8px;
+        }
+
+        .service-card:hover img {
+            transform: scale(1.1);
+        }
+
+        /* TESTIMONIALS ANIMATIONS */
+        @keyframes testimonialFadeInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes starRatingPulse {
+            0%, 100% {
+                transform: scale(1);
+                color: #ffc107;
+            }
+            50% {
+                transform: scale(1.2);
+                color: #ffd700;
+            }
+        }
+
+        @keyframes testimonialSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .testimonial {
+            animation: testimonialSlideIn 0.6s ease-out forwards;
+            opacity: 0;
+        }
+
+        .testimonial:nth-child(1) {
+            animation-delay: 0.1s;
+        }
+
+        .testimonial:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .testimonial:nth-child(3) {
+            animation-delay: 0.3s;
+        }
+
+        .stars {
+            animation: starRatingPulse 0.6s ease-in-out;
+            display: inline-block;
+        }
+
+        /* FORM ANIMATIONS */
+        @keyframes inputFocus {
+            from {
+                border-color: #ddd;
+                box-shadow: none;
+            }
+            to {
+                border-color: #cc3380;
+                box-shadow: 0 0 0 3px rgba(204, 51, 128, 0.1);
+            }
+        }
+
+        @keyframes checkmarkPulse {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes modalZoomFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="tel"],
+        input[type="date"],
+        select,
+        textarea {
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus,
+        input[type="email"]:focus,
+        input[type="tel"]:focus,
+        input[type="date"]:focus,
+        select:focus,
+        textarea:focus {
+            animation: inputFocus 0.3s ease;
+            border-color: #cc3380;
+            box-shadow: 0 0 0 3px rgba(204, 51, 128, 0.1);
+            outline: none;
+        }
+
+        .confirmation-modal {
+            animation: modalZoomFadeIn 0.3s ease;
+        }
+
+        /* NAVIGATION ANIMATIONS */
+        @keyframes navUnderlineSlide {
+            from {
+                width: 0;
+                left: 0;
+            }
+            to {
+                width: 100%;
+                left: 0;
+            }
+        }
+
+        .nav-links a {
+            position: relative;
+            padding-bottom: 5px;
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: 0;
+            left: 0;
+            background-color: #cc3380;
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .nav-links a.active::after {
+            width: 100%;
+            animation: navUnderlineSlide 0.4s ease;
+        }
+
+        @keyframes mobileMobileMenuSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .mobile-menu {
+            animation: mobileMobileMenuSlideIn 0.3s ease;
+        }
+
+        /* SCROLL TRIGGER ANIMATIONS */
+        .fade-in-on-scroll {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .fade-in-on-scroll.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .slide-in-left {
+            opacity: 0;
+            transform: translateX(-50px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .slide-in-left.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .slide-in-right {
+            opacity: 0;
+            transform: translateX(50px);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+        }
+
+        .slide-in-right.visible {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        /* CAROUSEL ANIMATIONS */
+        @keyframes carouselSlide {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .carousel-item {
+            animation: carouselSlide 0.5s ease;
+        }
+
+        /* BUTTON ANIMATIONS */
+        @keyframes buttonHoverScale {
+            from {
+                transform: scale(1);
+            }
+            to {
+                transform: scale(1.05);
+            }
+        }
+
+        .btn-primary {
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .btn-primary:hover {
+            animation: buttonHoverScale 0.3s ease;
+        }
+
+        /* SUCCESS ANIMATION */
+        @keyframes successBounce {
+            0% {
+                transform: scale(0);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .success-checkmark {
+            animation: successBounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            color: #27ae60;
+        }
+
+        /* PAGE TRANSITION */
+        @keyframes pageTransitionIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        body {
+            animation: pageTransitionIn 0.5s ease;
+        }
+
+        /* HOVER GLOW EFFECT */
+        @keyframes glowEffect {
+            0%, 100% {
+                box-shadow: 0 0 5px rgba(204, 51, 128, 0.3);
+            }
+            50% {
+                box-shadow: 0 0 20px rgba(204, 51, 128, 0.6);
+            }
+        }
+
+        .glow-on-hover {
+            transition: all 0.3s ease;
+        }
+
+        .glow-on-hover:hover {
+            animation: glowEffect 1.5s ease infinite;
+        }
+
+        /* RESPONSIVE ANIMATIONS */
+        @media (max-width: 768px) {
+            .service-card {
+                animation-delay: 0s !important;
+            }
+
+            .testimonial {
+                animation-delay: 0s !important;
+            }
+
+            .hero h1 {
+                font-size: 36px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1612,5 +2039,276 @@
             </div>
         </div>
     </div>
+
+    <script>
+        // ========== SCROLL-TRIGGERED ANIMATIONS ==========
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -100px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        // Observe elements with fade-in-on-scroll class
+        document.querySelectorAll('.fade-in-on-scroll, .slide-in-left, .slide-in-right').forEach(el => {
+            observer.observe(el);
+        });
+
+        // ========== SERVICES CARD ANIMATIONS ==========
+        document.addEventListener('DOMContentLoaded', () => {
+            const serviceCards = document.querySelectorAll('.service-card');
+            serviceCards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.15}s`;
+            });
+
+            const testimonials = document.querySelectorAll('.testimonial');
+            testimonials.forEach((testimonial, index) => {
+                testimonial.style.animationDelay = `${index * 0.15}s`;
+            });
+        });
+
+        // ========== TESTIMONIAL CAROUSEL AUTO-SCROLL ==========
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.testimonial');
+        const totalSlides = slides.length;
+
+        function showSlide(n) {
+            slides.forEach((slide, index) => {
+                slide.style.display = index === n ? 'block' : 'none';
+            });
+        }
+
+        function nextSlide() {
+            currentSlide = (currentSlide + 1) % totalSlides;
+            showSlide(currentSlide);
+        }
+
+        function prevSlide() {
+            currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+            showSlide(currentSlide);
+        }
+
+        // Auto-advance carousel every 5 seconds
+        if (totalSlides > 0) {
+            showSlide(0);
+            setInterval(() => {
+                nextSlide();
+            }, 5000);
+        }
+
+        // Manual carousel controls
+        const prevBtn = document.querySelector('.testimonials .prev');
+        const nextBtn = document.querySelector('.testimonials .next');
+
+        if (prevBtn) prevBtn.addEventListener('click', prevSlide);
+        if (nextBtn) nextBtn.addEventListener('click', nextSlide);
+
+        // ========== NAVIGATION ACTIVE LINK ==========
+        const navLinks = document.querySelectorAll('.nav-links a');
+        const sections = document.querySelectorAll('[id]');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                if (pageYOffset >= sectionTop - 200) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href').slice(1) === current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+
+        // ========== SMOOTH SCROLL BEHAVIOR ==========
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // ========== INPUT FOCUS ANIMATIONS ==========
+        const formInputs = document.querySelectorAll('input, select, textarea');
+        formInputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.style.borderColor = '#cc3380';
+                this.style.boxShadow = '0 0 0 3px rgba(204, 51, 128, 0.1)';
+            });
+
+            input.addEventListener('blur', function() {
+                if (this.value === '') {
+                    this.style.borderColor = '#ddd';
+                    this.style.boxShadow = 'none';
+                }
+            });
+        });
+
+        // ========== BOOKING FORM SUCCESS ANIMATION ==========
+        const originalShowConfirmationModal = window.showConfirmationModal;
+        window.showConfirmationModal = function(bookingNumber, bookingData) {
+            // Call original function
+            if (originalShowConfirmationModal) {
+                originalShowConfirmationModal(bookingNumber, bookingData);
+            }
+
+            // Add success animation to modal
+            const modal = document.getElementById('confirmationModal');
+            if (modal) {
+                modal.style.animation = 'modalZoomFadeIn 0.4s ease';
+
+                // Add checkmark animation to booking number
+                const bookingNumberEl = document.querySelector('.booking-number');
+                if (bookingNumberEl) {
+                    const checkmark = document.createElement('span');
+                    checkmark.innerHTML = ' <i class="fas fa-check-circle" style="color: #27ae60; margin-left: 10px;"></i>';
+                    checkmark.style.animation = 'checkmarkPulse 0.6s ease';
+                    bookingNumberEl.appendChild(checkmark);
+                }
+            }
+        };
+
+        // ========== BUTTON RIPPLE EFFECT ==========
+        function createRipple(event) {
+            const button = event.currentTarget;
+            const circle = document.createElement('span');
+            const diameter = Math.max(button.clientWidth, button.clientHeight);
+            const radius = diameter / 2;
+
+            circle.style.width = circle.style.height = diameter + 'px';
+            circle.style.left = event.clientX - button.offsetLeft - radius + 'px';
+            circle.style.top = event.clientY - button.offsetTop - radius + 'px';
+            circle.classList.add('ripple');
+
+            const ripple = button.querySelector('.ripple');
+            if (ripple) {
+                ripple.remove();
+            }
+
+            button.appendChild(circle);
+        }
+
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('click', createRipple);
+        });
+
+        // ========== PARALLAX SCROLL EFFECT ==========
+        const heroSection = document.querySelector('.hero');
+        if (heroSection) {
+            window.addEventListener('scroll', () => {
+                const scrollPosition = window.pageYOffset;
+                heroSection.style.backgroundPosition = `center ${scrollPosition * 0.5}px`;
+            });
+        }
+
+        // ========== MOBILE MENU ANIMATION ==========
+        const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+        const navLinksContainer = document.querySelector('.nav-links');
+
+        if (mobileMenuToggle) {
+            mobileMenuToggle.addEventListener('click', () => {
+                navLinksContainer.classList.toggle('mobile-menu');
+                mobileMenuToggle.classList.toggle('active');
+            });
+
+            // Close menu when a link is clicked
+            document.querySelectorAll('.nav-links a').forEach(link => {
+                link.addEventListener('click', () => {
+                    navLinksContainer.classList.remove('mobile-menu');
+                    mobileMenuToggle.classList.remove('active');
+                });
+            });
+        }
+
+        // ========== STAR RATING ANIMATION ==========
+        const stars = document.querySelectorAll('.stars');
+        stars.forEach(starContainer => {
+            starContainer.addEventListener('mouseenter', () => {
+                starContainer.style.animation = 'starRatingPulse 0.6s ease-in-out';
+            });
+
+            starContainer.addEventListener('animationend', () => {
+                starContainer.style.animation = 'none';
+            });
+        });
+
+        // ========== FORM SUBMIT SUCCESS ANIMATION ==========
+        const bookingForm = document.getElementById('bookingForm');
+        if (bookingForm) {
+            const originalOnsubmit = bookingForm.onsubmit;
+            bookingForm.onsubmit = function(e) {
+                const submitButton = this.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.style.animation = 'buttonHoverScale 0.3s ease';
+                }
+                return originalOnsubmit ? originalOnsubmit.call(this, e) : true;
+            };
+        }
+
+        // ========== PAGE LOAD ANIMATION ==========
+        window.addEventListener('load', () => {
+            document.body.style.animation = 'pageTransitionIn 0.5s ease';
+        });
+
+        // ========== GLOW EFFECT ON BUTTONS ==========
+        document.querySelectorAll('.cta-button, .btn-primary').forEach(button => {
+            button.classList.add('glow-on-hover');
+        });
+
+        // ========== COPY BOOKING NUMBER ANIMATION ==========
+        const copyButton = document.querySelector('.btn-copy-id');
+        if (copyButton) {
+            const originalOnclick = copyButton.onclick;
+            copyButton.onclick = function(e) {
+                if (originalOnclick) originalOnclick.call(this, e);
+
+                // Flash animation
+                this.style.animation = 'none';
+                setTimeout(() => {
+                    this.style.animation = 'heroButtonPulse 0.6s ease';
+                }, 10);
+
+                // Change text temporarily
+                const originalText = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                }, 2000);
+            };
+        }
+
+        // ========== LOADING ANIMATION ==========
+        window.addEventListener('beforeunload', () => {
+            document.body.style.opacity = '0.7';
+        });
+
+        // ========== RESIZE RESPONSIVE ANIMATIONS ==========
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            if (width <= 768) {
+                document.querySelectorAll('.service-card').forEach(card => {
+                    card.style.animationDelay = '0s';
+                });
+            }
+        });
+    </script>
 </body>
 </html>
