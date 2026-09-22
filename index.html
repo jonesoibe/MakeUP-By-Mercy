@@ -2924,13 +2924,27 @@
                 day: 'numeric'
             });
 
-            confirmationDetailsEl.innerHTML = `
-                <p><span class="confirmation-label">Name:</span> ${booking.name}</p>
-                <p><span class="confirmation-label">Phone:</span> ${booking.phone} (${booking.country})</p>
-                <p><span class="confirmation-label">Email:</span> ${booking.email}</p>
-                <p><span class="confirmation-label">Service:</span> ${serviceDisplay}</p>
-                <p><span class="confirmation-label">Date:</span> ${bookingDate}</p>
-            `;
+            // Clear previous content
+            confirmationDetailsEl.innerHTML = '';
+
+            // Create details using safe DOM methods
+            const details = [
+                { label: 'Name:', value: booking.name },
+                { label: 'Phone:', value: `${booking.phone} (${booking.country})` },
+                { label: 'Email:', value: booking.email },
+                { label: 'Service:', value: serviceDisplay },
+                { label: 'Date:', value: bookingDate }
+            ];
+
+            details.forEach(detail => {
+                const p = document.createElement('p');
+                const label = document.createElement('span');
+                label.className = 'confirmation-label';
+                label.textContent = detail.label;
+                p.appendChild(label);
+                p.appendChild(document.createTextNode(` ${detail.value}`));
+                confirmationDetailsEl.appendChild(p);
+            });
 
             modal.classList.add('show');
         }
