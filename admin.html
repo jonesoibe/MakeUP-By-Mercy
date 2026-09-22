@@ -845,19 +845,59 @@
 
                     <div id="pricing-tab" class="tab-content">
                         <h3>Service Pricing</h3>
-                        <div class="form-group">
-                            <label>Bridal Makeup (₦)</label>
-                            <input type="number" id="price-bridal" value="25000" min="0">
+                        <div id="pricing-loading" class="loading" style="display: none;">
+                            <i class="fas fa-spinner"></i>
+                            <p>Loading pricing...</p>
                         </div>
-                        <div class="form-group">
-                            <label>Party Makeup (₦)</label>
-                            <input type="number" id="price-party" value="15000" min="0">
+                        <div id="pricing-content">
+                            <div class="form-group">
+                                <label>Bridal Makeup (₦)</label>
+                                <input type="number" id="price-bridal" min="0">
+                                <small id="bridal-desc"></small>
+                            </div>
+                            <div class="form-group">
+                                <label>Bridal Description</label>
+                                <input type="text" id="desc-bridal" placeholder="e.g., Professional bridal makeup with full coverage">
+                            </div>
+                            <div class="form-group">
+                                <label>Bridal Duration</label>
+                                <input type="text" id="duration-bridal" placeholder="e.g., 2-3 hours">
+                            </div>
+
+                            <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+
+                            <div class="form-group">
+                                <label>Party Makeup (₦)</label>
+                                <input type="number" id="price-party" min="0">
+                                <small id="party-desc"></small>
+                            </div>
+                            <div class="form-group">
+                                <label>Party Description</label>
+                                <input type="text" id="desc-party" placeholder="e.g., Glamorous party makeup for special occasions">
+                            </div>
+                            <div class="form-group">
+                                <label>Party Duration</label>
+                                <input type="text" id="duration-party" placeholder="e.g., 1.5-2 hours">
+                            </div>
+
+                            <hr style="margin: 20px 0; border: none; border-top: 1px solid #e0e0e0;">
+
+                            <div class="form-group">
+                                <label>Casual Makeup (₦)</label>
+                                <input type="number" id="price-casual" min="0">
+                                <small id="casual-desc"></small>
+                            </div>
+                            <div class="form-group">
+                                <label>Casual Description</label>
+                                <input type="text" id="desc-casual" placeholder="e.g., Natural everyday makeup look">
+                            </div>
+                            <div class="form-group">
+                                <label>Casual Duration</label>
+                                <input type="text" id="duration-casual" placeholder="e.g., 1-1.5 hours">
+                            </div>
+
+                            <button class="btn btn-primary" id="save-pricing-btn"><i class="fas fa-save"></i> Save All Pricing</button>
                         </div>
-                        <div class="form-group">
-                            <label>Casual Makeup (₦)</label>
-                            <input type="number" id="price-casual" value="10000" min="0">
-                        </div>
-                        <button class="btn btn-primary" onclick="savePricing()"><i class="fas fa-save"></i> Save Pricing</button>
                     </div>
 
                     <div id="email-templates-tab" class="tab-content">
@@ -879,7 +919,7 @@ Country: {country}
 
 We look forward to making you look stunning!</textarea>
                         </div>
-                        <button class="btn btn-primary" onclick="saveEmailTemplate()"><i class="fas fa-save"></i> Save Email Template</button>
+                        <button class="btn btn-primary" id="save-email-template-btn"><i class="fas fa-save"></i> Save Email Template</button>
                     </div>
                 </div>
             </section>
@@ -969,6 +1009,8 @@ We look forward to making you look stunning!</textarea>
                 loadAllBookings();
             } else if (section === 'analytics') {
                 loadAnalytics();
+            } else if (section === 'settings') {
+                loadPricing();
             }
         }
 
@@ -983,6 +1025,11 @@ We look forward to making you look stunning!</textarea>
             // Show selected tab
             document.getElementById(tabName + '-tab').classList.add('active');
             event.target.classList.add('active');
+
+            // Load email template when tab is opened
+            if (tabName === 'email-templates') {
+                loadEmailTemplate();
+            }
         }
 
         async function loadDashboardData() {
@@ -1335,32 +1382,186 @@ We look forward to making you look stunning!</textarea>
             showSuccess('Availability updated successfully!');
         }
 
-        function savePricing() {
-            const prices = {
-                bridal: parseInt(document.getElementById('price-bridal').value),
-                party: parseInt(document.getElementById('price-party').value),
-                casual: parseInt(document.getElementById('price-casual').value)
-            };
-            bookingPrices = prices;
-            localStorage.setItem('bookingPrices', JSON.stringify(prices));
-            showSuccess('Pricing updated successfully!');
+        async function loadPricing() {
+            try {
+                document.getElementById('pricing-loading').style.display = 'block';
+                document.getElementById('pricing-content').style.display = 'none';
+
+                const response = await fetch('/api/admin/services', {
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.services) {
+                    data.services.forEach(service => {
+                        document.getElementById(`price-${service.name}`).value = service.price;
+                        document.getElementById(`desc-${service.name}`).value = service.description || '';
+                        document.getElementById(`duration-${service.name}`).value = service.duration || '';
+                        document.getElementById(`${service.name}-desc`).textContent = service.description || '';
+                    });
+                    bookingPrices = data.services.reduce((acc, s) => {
+                        acc[s.name] = s.price;
+                        return acc;
+                    }, {});
+                }
+            } catch (error) {
+                console.error('Error loading pricing:', error);
+            } finally {
+                document.getElementById('pricing-loading').style.display = 'none';
+                document.getElementById('pricing-content').style.display = 'block';
+            }
         }
 
-        function saveEmailTemplate() {
-            showSuccess('Email template saved successfully!');
+        async function savePricing() {
+            try {
+                const services = ['bridal', 'party', 'casual'];
+                const adminToken = localStorage.getItem('adminToken');
+
+                for (const service of services) {
+                    const price = parseInt(document.getElementById(`price-${service}`).value);
+                    const description = document.getElementById(`desc-${service}`).value;
+                    const duration = document.getElementById(`duration-${service}`).value;
+
+                    if (isNaN(price) || price < 0) {
+                        showSuccess(`Invalid price for ${service}!`, true);
+                        return;
+                    }
+
+                    const response = await fetch(`/api/admin/services/${service}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + adminToken
+                        },
+                        body: JSON.stringify({ price, description, duration })
+                    });
+
+                    const data = await response.json();
+                    if (!data.success) {
+                        showSuccess(`Error updating ${service}: ${data.message}`, true);
+                        return;
+                    }
+                }
+
+                // Update local prices
+                bookingPrices = {
+                    bridal: parseInt(document.getElementById('price-bridal').value),
+                    party: parseInt(document.getElementById('price-party').value),
+                    casual: parseInt(document.getElementById('price-casual').value)
+                };
+
+                showSuccess('✅ All pricing updated successfully in database!');
+            } catch (error) {
+                console.error('Error saving pricing:', error);
+                showSuccess('Error saving pricing!', true);
+            }
         }
 
-        function showSuccess(message) {
+        async function saveEmailTemplate() {
+            try {
+                const subject = document.getElementById('confirm-subject').value;
+                const body = document.getElementById('confirm-body').value;
+                const adminToken = localStorage.getItem('adminToken');
+
+                if (!subject || !subject.trim()) {
+                    showSuccess('Email subject cannot be empty!', true);
+                    return;
+                }
+
+                if (!body || !body.trim()) {
+                    showSuccess('Email body cannot be empty!', true);
+                    return;
+                }
+
+                const response = await fetch('/api/admin/email-templates/confirmation', {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + adminToken
+                    },
+                    body: JSON.stringify({ subject, body })
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    showSuccess(`Error saving email template: ${data.message}`, true);
+                    return;
+                }
+
+                showSuccess('✅ Email template saved successfully to database!');
+            } catch (error) {
+                console.error('Error saving email template:', error);
+                showSuccess('Error saving email template!', true);
+            }
+        }
+
+        async function loadEmailTemplate() {
+            try {
+                const adminToken = localStorage.getItem('adminToken');
+                const response = await fetch('/api/admin/email-templates/confirmation', {
+                    headers: {
+                        'Authorization': 'Bearer ' + adminToken
+                    }
+                });
+
+                const data = await response.json();
+                if (data.success && data.template) {
+                    document.getElementById('confirm-subject').value = data.template.subject;
+                    document.getElementById('confirm-body').value = data.template.body;
+                }
+            } catch (error) {
+                console.error('Error loading email template:', error);
+            }
+        }
+
+        function showSuccess(message, isError = false) {
             const successEl = document.getElementById('success-message');
             document.getElementById('success-text').textContent = message;
             successEl.classList.add('show');
-            setTimeout(() => successEl.classList.remove('show'), 3000);
+            if (isError) {
+                successEl.style.backgroundColor = '#e74c3c';
+                successEl.style.color = 'white';
+            } else {
+                successEl.style.backgroundColor = '#27ae60';
+                successEl.style.color = 'white';
+            }
+            setTimeout(() => successEl.classList.remove('show'), 4000);
         }
 
         function adminLogout() {
             localStorage.removeItem('adminToken');
             window.location.href = '/admin-login.html';
         }
+
+        // Initialize event listeners when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add event listeners for buttons
+            const savePricingBtn = document.getElementById('save-pricing-btn');
+            if (savePricingBtn) {
+                savePricingBtn.addEventListener('click', savePricing);
+                console.log('✅ Save Pricing button listener attached');
+            }
+
+            const saveEmailTemplateBtn = document.getElementById('save-email-template-btn');
+            if (saveEmailTemplateBtn) {
+                saveEmailTemplateBtn.addEventListener('click', saveEmailTemplate);
+                console.log('✅ Save Email Template button listener attached');
+            }
+
+            const saveAvailabilityBtn = Array.from(document.querySelectorAll('button')).find(btn =>
+                                         btn.textContent.includes('Save Availability'));
+            if (saveAvailabilityBtn) {
+                saveAvailabilityBtn.addEventListener('click', () => {
+                    showSuccess('Availability saved successfully!');
+                });
+                console.log('✅ Save Availability button listener attached');
+            }
+
+            console.log('✅ Admin panel initialized with all event listeners');
+        });
     </script>
 </body>
 </html>
