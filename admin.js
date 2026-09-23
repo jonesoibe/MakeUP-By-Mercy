@@ -458,7 +458,7 @@ async function loadPricing() {
         document.getElementById('pricing-loading').style.display = 'block';
         document.getElementById('pricing-content').style.display = 'none';
 
-        const response = await fetch('/api/admin/services', {
+        const response = await fetch('/api/admin/pricing', {
             headers: {
                 'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
             }
@@ -466,15 +466,25 @@ async function loadPricing() {
 
         const data = await response.json();
 
-        if (data.success && data.services) {
-            data.services.forEach(service => {
-                document.getElementById(`price-${service.name}`).value = service.price;
-                document.getElementById(`desc-${service.name}`).value = service.description || '';
-                document.getElementById(`duration-${service.name}`).value = service.duration || '';
-                document.getElementById(`${service.name}-desc`).textContent = service.description || '';
+        if (data.success && data.pricing) {
+            data.pricing.forEach(service => {
+                const serviceName = service.service || service.name;
+                if (document.getElementById(`price-${serviceName}`)) {
+                    document.getElementById(`price-${serviceName}`).value = service.price || service.minPrice || '';
+                    if (document.getElementById(`desc-${serviceName}`)) {
+                        document.getElementById(`desc-${serviceName}`).value = service.description || '';
+                    }
+                    if (document.getElementById(`duration-${serviceName}`)) {
+                        document.getElementById(`duration-${serviceName}`).value = service.duration || '';
+                    }
+                    if (document.getElementById(`${serviceName}-desc`)) {
+                        document.getElementById(`${serviceName}-desc`).textContent = service.description || '';
+                    }
+                }
             });
-            bookingPrices = data.services.reduce((acc, s) => {
-                acc[s.name] = s.price;
+            bookingPrices = data.pricing.reduce((acc, s) => {
+                const serviceName = s.service || s.name;
+                acc[serviceName] = s.price || s.minPrice || 0;
                 return acc;
             }, {});
         }
@@ -501,7 +511,7 @@ async function savePricing() {
                 return;
             }
 
-            const response = await fetch(`/api/admin/services/${service}`, {
+            const response = await fetch(`/api/admin/pricing/${service}`, {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
