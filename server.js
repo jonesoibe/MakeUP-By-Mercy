@@ -12,6 +12,8 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const Joi = require('joi');
 const winston = require('winston');
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./swagger.json');
 require('dotenv').config();
 
 const app = express();
@@ -295,6 +297,24 @@ app.use((req, res, next) => {
 
 // Serve static files
 app.use(express.static(__dirname));
+
+// ========== SWAGGER API DOCUMENTATION ==========
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  swaggerOptions: {
+    url: '/swagger.json',
+    displayOperationId: false,
+    defaultModelsExpandDepth: 1,
+    defaultModelExpandDepth: 1
+  },
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'MakeUP By Mercy API Documentation'
+}));
+
+// Serve swagger.json file
+app.get('/swagger.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerDocument);
+});
 
 // Function to send confirmation email to CLIENT
 async function sendConfirmationEmail(booking) {

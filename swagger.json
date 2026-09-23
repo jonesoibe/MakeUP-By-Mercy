@@ -1,0 +1,1158 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "MakeUP By Mercy API",
+    "description": "Comprehensive API documentation for the MakeUP By Mercy booking management system",
+    "version": "1.0.0",
+    "contact": {
+      "name": "MakeUP By Mercy Support",
+      "email": "support@makeup-mercy.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://makeup-by-mercy.onrender.com",
+      "description": "Production server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT token for admin authentication"
+      }
+    },
+    "schemas": {
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "description": "Unique booking ID"
+          },
+          "bookingNumber": {
+            "type": "string",
+            "description": "Unique booking reference number"
+          },
+          "name": {
+            "type": "string",
+            "description": "Customer name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Customer email address"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Customer phone number"
+          },
+          "country": {
+            "type": "string",
+            "description": "Customer country"
+          },
+          "service": {
+            "type": "string",
+            "enum": ["bridal", "party", "casual"],
+            "description": "Makeup service type"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Appointment date and time"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "confirmed", "completed", "cancelled"],
+            "description": "Booking status"
+          },
+          "bookedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the booking was created"
+          }
+        }
+      },
+      "Admin": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["admin", "manager", "viewer"],
+            "description": "Admin role"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Pricing": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string",
+            "enum": ["bridal", "party", "casual"]
+          },
+          "minPrice": {
+            "type": "number",
+            "description": "Minimum price in Naira"
+          },
+          "maxPrice": {
+            "type": "number",
+            "description": "Maximum price in Naira"
+          },
+          "description": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "string"
+          }
+        }
+      },
+      "EmailTemplate": {
+        "type": "object",
+        "properties": {
+          "_id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["confirmation", "reminder", "cancellation"],
+            "description": "Template type"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject (5-200 chars)"
+          },
+          "body": {
+            "type": "string",
+            "description": "Email body template (20-5000 chars)"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Template variables like {bookingNumber}, {date}, {service}"
+          },
+          "updatedBy": {
+            "type": "string",
+            "description": "Username who last updated the template"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DashboardStats": {
+        "type": "object",
+        "properties": {
+          "totalBookings": {
+            "type": "integer"
+          },
+          "confirmedBookings": {
+            "type": "integer"
+          },
+          "monthlyRevenue": {
+            "type": "number"
+          },
+          "repeatCustomers": {
+            "type": "integer"
+          },
+          "appointments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Booking"
+            }
+          }
+        }
+      },
+      "Analytics": {
+        "type": "object",
+        "properties": {
+          "serviceBreakdown": {
+            "type": "object",
+            "properties": {
+              "bridal": {
+                "type": "integer"
+              },
+              "party": {
+                "type": "integer"
+              },
+              "casual": {
+                "type": "integer"
+              }
+            }
+          },
+          "totalRevenue": {
+            "type": "number"
+          },
+          "conversionRate": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/bookings": {
+      "get": {
+        "tags": ["Bookings"],
+        "summary": "Get all bookings",
+        "description": "Retrieve all bookings with optional filtering",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "confirmed", "completed", "cancelled"]
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["bridal", "party", "casual"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of bookings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "bookings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Booking"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Bookings"],
+        "summary": "Create a new booking",
+        "description": "Submit a new makeup booking request",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "email", "phone", "service", "date"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 100
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "country": {
+                    "type": "string"
+                  },
+                  "service": {
+                    "type": "string",
+                    "enum": ["bridal", "party", "casual"]
+                  },
+                  "date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Appointment date (must be in future)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Booking created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "booking": {
+                      "$ref": "#/components/schemas/Booking"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid booking data"
+          },
+          "429": {
+            "description": "Too many booking requests (rate limited)"
+          }
+        }
+      }
+    },
+    "/api/bookings/{id}": {
+      "get": {
+        "tags": ["Bookings"],
+        "summary": "Get booking details",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "booking": {
+                      "$ref": "#/components/schemas/Booking"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Booking not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Bookings"],
+        "summary": "Cancel a booking",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking cancelled successfully"
+          },
+          "404": {
+            "description": "Booking not found"
+          }
+        }
+      }
+    },
+    "/api/admin/login": {
+      "post": {
+        "tags": ["Admin Authentication"],
+        "summary": "Admin login",
+        "description": "Authenticate admin user and get JWT token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "JWT token (valid for 24 hours)"
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "429": {
+            "description": "Too many login attempts"
+          }
+        }
+      }
+    },
+    "/api/admin/dashboard": {
+      "get": {
+        "tags": ["Admin Dashboard"],
+        "summary": "Get dashboard statistics",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "totalBookings": {
+                      "type": "integer"
+                    },
+                    "confirmedBookings": {
+                      "type": "integer"
+                    },
+                    "monthlyRevenue": {
+                      "type": "number"
+                    },
+                    "repeatCustomers": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - invalid token"
+          }
+        }
+      }
+    },
+    "/api/admin/bookings": {
+      "get": {
+        "tags": ["Admin Bookings"],
+        "summary": "Get all bookings (admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All bookings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "bookings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Booking"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/admin/bookings/recent": {
+      "get": {
+        "tags": ["Admin Bookings"],
+        "summary": "Get recent bookings",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent bookings"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/admin/appointments/upcoming": {
+      "get": {
+        "tags": ["Admin Appointments"],
+        "summary": "Get upcoming appointments",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of upcoming appointments"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/admin/bookings/{id}/confirm": {
+      "patch": {
+        "tags": ["Admin Bookings"],
+        "summary": "Confirm a booking",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking confirmed successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Booking not found"
+          }
+        }
+      }
+    },
+    "/api/admin/bookings/{id}/cancel": {
+      "patch": {
+        "tags": ["Admin Bookings"],
+        "summary": "Cancel a booking",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Booking cancelled successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/admin/bookings/{id}/message": {
+      "post": {
+        "tags": ["Admin Bookings"],
+        "summary": "Send message to customer",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message sent successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/admin/analytics": {
+      "get": {
+        "tags": ["Admin Analytics"],
+        "summary": "Get analytics data",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analytics data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "serviceBreakdown": {
+                      "type": "object",
+                      "properties": {
+                        "bridal": {
+                          "type": "integer"
+                        },
+                        "party": {
+                          "type": "integer"
+                        },
+                        "casual": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/admin/pricing": {
+      "get": {
+        "tags": ["Admin Pricing"],
+        "summary": "Get all pricing",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All pricing information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "pricing": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Pricing"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/admin/pricing/{service}": {
+      "patch": {
+        "tags": ["Admin Pricing"],
+        "summary": "Update service pricing",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["bridal", "party", "casual"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "price": {
+                    "type": "number"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "duration": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pricing updated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/pricing/{service}": {
+      "get": {
+        "tags": ["Public Pricing"],
+        "summary": "Get pricing for a specific service",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["bridal", "party", "casual"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service pricing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "pricing": {
+                      "$ref": "#/components/schemas/Pricing"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/email-templates": {
+      "get": {
+        "tags": ["Admin Email Templates"],
+        "summary": "Get all email templates",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All email templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "templates": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/EmailTemplate"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/email-templates/{type}": {
+      "get": {
+        "tags": ["Email Templates"],
+        "summary": "Get email template by type",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["confirmation", "reminder", "cancellation"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Email template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "template": {
+                      "$ref": "#/components/schemas/EmailTemplate"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Template not found"
+          }
+        }
+      },
+      "put": {
+        "tags": ["Admin Email Templates"],
+        "summary": "Replace email template",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["confirmation", "reminder", "cancellation"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["subject", "body"],
+                "properties": {
+                  "subject": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 200
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template updated successfully"
+          },
+          "400": {
+            "description": "Invalid template data"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Admin Email Templates"],
+        "summary": "Partially update email template",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["confirmation", "reminder", "cancellation"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subject": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 200
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template partially updated"
+          },
+          "400": {
+            "description": "Invalid template data"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": ["Admin Users"],
+        "summary": "Get all admin users",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of admin users"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Admin Users"],
+        "summary": "Create new admin user",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "email", "password", "role"],
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 6
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": ["admin", "manager", "viewer"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check endpoint",
+        "responses": {
+          "200": {
+            "description": "Server is healthy"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Bookings",
+      "description": "Public booking endpoints"
+    },
+    {
+      "name": "Admin Authentication",
+      "description": "Admin login and token management"
+    },
+    {
+      "name": "Admin Dashboard",
+      "description": "Dashboard statistics and overview"
+    },
+    {
+      "name": "Admin Bookings",
+      "description": "Booking management endpoints"
+    },
+    {
+      "name": "Admin Appointments",
+      "description": "Appointment management"
+    },
+    {
+      "name": "Admin Analytics",
+      "description": "Analytics and reporting"
+    },
+    {
+      "name": "Admin Pricing",
+      "description": "Pricing management"
+    },
+    {
+      "name": "Public Pricing",
+      "description": "Public pricing information"
+    },
+    {
+      "name": "Admin Email Templates",
+      "description": "Email template management"
+    },
+    {
+      "name": "Email Templates",
+      "description": "Public email templates"
+    },
+    {
+      "name": "Admin Users",
+      "description": "User management"
+    },
+    {
+      "name": "Health",
+      "description": "System health endpoints"
+    }
+  ]
+}
