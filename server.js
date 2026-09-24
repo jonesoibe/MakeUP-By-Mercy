@@ -62,8 +62,11 @@ const logger = winston.createLogger({
 });
 
 // Legacy log function for compatibility
+// Maps non-standard levels (e.g. 'SUCCESS') to valid Winston npm levels,
+// since Winston silently drops log calls with an unrecognized level.
 function log(level, message, data = '') {
-  logger.log({ level: level.toLowerCase(), message, data: data || null });
+  const normalizedLevel = level.toLowerCase() === 'success' ? 'info' : level.toLowerCase();
+  logger.log({ level: normalizedLevel, message, data: data || null });
 }
 
 logger.info('Server starting');
