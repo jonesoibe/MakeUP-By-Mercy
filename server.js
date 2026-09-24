@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
-const nodemailer = require('nodemailer');
+const sgMail = require('@sendgrid/mail');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
@@ -111,32 +111,27 @@ const bookingSchema = new mongoose.Schema({
 const Booking = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
 
 // ========== EMAIL CONFIGURATION ==========
-// Use TLS (port 587) for more reliable Gmail connection
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  },
-  // Without explicit timeouts, nodemailer's defaults (up to 2 minutes for
-  // connectionTimeout) mean a stalled SMTP connection blocks whatever is
-  // awaiting sendMail() for that long. Bound it so a network issue fails
-  // fast and loud instead of hanging.
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000
-});
+// SendGrid's HTTP API (port 443) instead of raw SMTP. Render's outbound
+// SMTP connection to Gmail was unreliable in production - the same
+// credentials worked fine from a local network, pointing to SMTP port
+// throttling/blocking at the hosting-platform level rather than a
+// credentials problem. HTTPS doesn't have that class of issue.
+const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER;
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  log('INFO', 'Email service ready (SendGrid)');
+} else {
+  log('WARN', 'SENDGRID_API_KEY not configured - emails will not be sent');
+}
 
-// Test email connection
-transporter.verify((error, success) => {
-  if (error) {
-    log('ERROR', 'Email configuration error:', error.message);
-  } else {
-    log('INFO', 'Email service ready');
+// Drop-in replacement for the old transporter.sendMail({ to, subject, html }).
+// Throws on failure so existing try/catch call sites keep working unchanged.
+async function sendEmail({ to, subject, html }) {
+  if (!process.env.SENDGRID_API_KEY) {
+    throw new Error('SENDGRID_API_KEY not configured');
   }
-});
+  await sgMail.send({ to, from: SENDGRID_FROM_EMAIL, subject, html });
+}
 
 // Middleware
 const corsOptions = {
@@ -349,8 +344,8 @@ app.get('/swagger.json', (req, res) => {
 // Function to send confirmation email to CLIENT
 async function sendConfirmationEmail(booking) {
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      log('WARN', 'Email disabled - no credentials configured');
+    if (!process.env.SENDGRID_API_KEY) {
+      log('WARN', 'Email disabled - SENDGRID_API_KEY not configured');
       return false;
     }
 
@@ -411,7 +406,7 @@ async function sendConfirmationEmail(booking) {
       `
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendEmail(mailOptions);
     log('SUCCESS', `Confirmation email sent to ${booking.email}`);
 
     // Update booking in database
@@ -428,9 +423,9 @@ async function sendConfirmationEmail(booking) {
 // Function to send notification email to MERCY (owner)
 async function sendMercyNotification(booking) {
   try {
-    // If email credentials are not configured or no owner email, skip
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      log('WARN', 'Email credentials not configured - skipping admin notification');
+    // If SendGrid is not configured, skip
+    if (!process.env.SENDGRID_API_KEY) {
+      log('WARN', 'SENDGRID_API_KEY not configured - skipping admin notification');
       return true;
     }
 
@@ -481,7 +476,7 @@ async function sendMercyNotification(booking) {
       `
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendEmail(mailOptions);
     log('SUCCESS', `Booking notification sent to owner (${ownerEmail})`);
 
     // Update booking in database
@@ -1190,12 +1185,10 @@ app.post('/api/admin/bookings/:id/message', verifyAdminToken, async (req, res) =
       `
     };
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        log('ERROR', 'Error sending message:', error.message);
-      } else {
-        log('SUCCESS', `Message sent to ${booking.email}`);
-      }
+    sendEmail(mailOptions).then(() => {
+      log('SUCCESS', `Message sent to ${booking.email}`);
+    }).catch((error) => {
+      log('ERROR', 'Error sending message:', error.message);
     });
 
     res.json({ success: true, message: 'Message sent successfully' });
@@ -1489,8 +1482,7 @@ app.post('/api/admin/bookings/:id/contact', verifyAdminToken, validateRequest(co
     }
 
     // Send email to customer with escaped content
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await sendEmail({
       to: booking.email,
       subject: escapeHtml(subject || `Update regarding your booking ${booking.bookingNumber}`),
       html: `

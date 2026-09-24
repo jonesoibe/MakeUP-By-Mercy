@@ -12,9 +12,11 @@ services:
         value: 3000
       - key: MONGODB_URI
         sync: false
-      - key: EMAIL_USER
+      - key: SENDGRID_API_KEY
         sync: false
-      - key: EMAIL_PASSWORD
+      - key: SENDGRID_FROM_EMAIL
+        sync: false
+      - key: EMAIL_USER
         sync: false
       - key: OWNER_EMAIL
         sync: false
