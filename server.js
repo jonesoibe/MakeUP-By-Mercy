@@ -234,20 +234,25 @@ const createAdminSchema = Joi.object({
 
 // Pricing validation schema
 const updatePricingSchema = Joi.object({
-  minPrice: Joi.number().min(0).required(),
-  maxPrice: Joi.number().min(0).required(),
-  description: Joi.string().max(500).optional()
-}).custom((value, helpers) => {
-  if (value.minPrice > value.maxPrice) {
-    return helpers.error('any.invalid');
-  }
-  return value;
-}, 'price validation');
+  price: Joi.number().min(0).required(),
+  description: Joi.string().max(500).allow('').optional(),
+  duration: Joi.string().max(100).allow('').optional()
+});
 
 // Email Template validation schema
 const updateEmailTemplateSchema = Joi.object({
   subject: Joi.string().min(5).max(200).required(),
   body: Joi.string().min(20).max(5000).required()
+});
+
+// Availability validation schema
+const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const updateAvailabilitySchema = Joi.object({
+  weekdayStart: Joi.string().pattern(timePattern).required(),
+  weekdayEnd: Joi.string().pattern(timePattern).required(),
+  weekendStart: Joi.string().pattern(timePattern).required(),
+  weekendEnd: Joi.string().pattern(timePattern).required(),
+  leadTimeDays: Joi.number().integer().min(0).max(90).required()
 });
 
 // Validation middleware
@@ -476,6 +481,49 @@ let bookingCounter = 1000; // Start at 1000
 // In-memory bookings database (fallback if MongoDB not connected)
 let bookings = [];
 
+// In-memory email templates (fallback if MongoDB not connected) - mirrors
+// the defaults seeded into MongoDB by initializeDefaultEmailTemplates()
+let emailTemplatesMemory = [
+  {
+    _id: 'mem-confirmation',
+    type: 'confirmation',
+    subject: 'Your MakeUP By Mercy Booking Confirmed - ID: {bookingNumber}',
+    body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!',
+    variables: ['bookingNumber', 'date', 'service', 'phone', 'country'],
+    updatedBy: 'system',
+    updatedAt: new Date()
+  },
+  {
+    _id: 'mem-reminder',
+    type: 'reminder',
+    subject: 'Reminder: Your MakeUP By Mercy Appointment - {date}',
+    body: 'Hi {name},\n\nThis is a friendly reminder about your upcoming appointment with MakeUP By Mercy.\n\nDate: {date}\nService: {service}\nBooking ID: {bookingNumber}\n\nIf you need to reschedule or cancel, please let us know as soon as possible.',
+    variables: ['name', 'date', 'service', 'bookingNumber'],
+    updatedBy: 'system',
+    updatedAt: new Date()
+  },
+  {
+    _id: 'mem-cancellation',
+    type: 'cancellation',
+    subject: 'Booking Cancelled - MakeUP By Mercy',
+    body: 'Hi {name},\n\nYour booking {bookingNumber} has been successfully cancelled.\n\nIf you have any questions, please don\'t hesitate to contact us.',
+    variables: ['name', 'bookingNumber'],
+    updatedBy: 'system',
+    updatedAt: new Date()
+  }
+];
+
+// In-memory availability settings (fallback if MongoDB not connected)
+let availabilityMemory = {
+  weekdayStart: '09:00',
+  weekdayEnd: '20:00',
+  weekendStart: '10:00',
+  weekendEnd: '18:00',
+  leadTimeDays: 1,
+  updatedBy: 'system',
+  updatedAt: new Date()
+};
+
 // API Routes
 
 // GET all bookings (admin route)
@@ -537,8 +585,16 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
     if (MONGO_URI && mongoose.connection.readyState === 1) {
       const newBooking = new Booking(booking);
       await newBooking.save();
+      // Mirror Mongo's real _id back onto the response payload so the
+      // admin UI (which always reads booking._id) has a valid identifier
+      // regardless of storage backend.
+      booking._id = newBooking._id.toString();
       log('SUCCESS', `Booking saved to MongoDB: ${booking.id}`);
     } else {
+      // In-memory fallback has no database-assigned _id, so mint one from
+      // the numeric id. Without this, admin actions (confirm/cancel/message)
+      // that look bookings up by _id can never find an in-memory booking.
+      booking._id = String(booking.id);
       bookings.push(booking);
       log('INFO', `Booking saved to memory: ${booking.id}`);
     }
@@ -680,14 +736,32 @@ const pricingSchema = new mongoose.Schema({
     unique: true,
     required: true
   },
-  minPrice: { type: Number, required: true, min: 0 },
-  maxPrice: { type: Number, required: true, min: 0 },
+  price: { type: Number, min: 0 },
+  duration: { type: String, default: '' },
+  // Legacy range fields, kept for backward compatibility with existing
+  // documents; no longer written to by the admin pricing update endpoint.
+  minPrice: { type: Number, min: 0 },
+  maxPrice: { type: Number, min: 0 },
   description: { type: String, default: '' },
   updatedBy: { type: String, default: 'system' },
   updatedAt: { type: Date, default: Date.now }
 });
 
 const Pricing = mongoose.models.Pricing || mongoose.model('Pricing', pricingSchema);
+
+// ========== AVAILABILITY SCHEMA ==========
+// Singleton document holding business hours / booking lead time.
+const availabilitySchema = new mongoose.Schema({
+  weekdayStart: { type: String, required: true, default: '09:00' },
+  weekdayEnd: { type: String, required: true, default: '20:00' },
+  weekendStart: { type: String, required: true, default: '10:00' },
+  weekendEnd: { type: String, required: true, default: '18:00' },
+  leadTimeDays: { type: Number, required: true, default: 1, min: 0, max: 90 },
+  updatedBy: { type: String, default: 'system' },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+const Availability = mongoose.models.Availability || mongoose.model('Availability', availabilitySchema);
 
 // ========== EMAIL TEMPLATES SCHEMA ==========
 const emailTemplateSchema = new mongoose.Schema({
@@ -747,9 +821,9 @@ async function initializeDefaultPricing() {
       const count = await Pricing.countDocuments();
       if (count === 0) {
         await Pricing.create([
-          { service: 'bridal', minPrice: 15000, maxPrice: 25000, description: 'Bridal makeup and styling' },
-          { service: 'party', minPrice: 8000, maxPrice: 15000, description: 'Party and event makeup' },
-          { service: 'casual', minPrice: 5000, maxPrice: 10000, description: 'Casual daily makeup' }
+          { service: 'bridal', price: 25000, duration: '2-3 hours', minPrice: 15000, maxPrice: 25000, description: 'Bridal makeup and styling' },
+          { service: 'party', price: 15000, duration: '1.5-2 hours', minPrice: 8000, maxPrice: 15000, description: 'Party and event makeup' },
+          { service: 'casual', price: 10000, duration: '1-1.5 hours', minPrice: 5000, maxPrice: 10000, description: 'Casual daily makeup' }
         ]);
         logger.info('Default pricing initialized');
       }
@@ -1522,7 +1596,7 @@ app.get('/api/admin/pricing', verifyAdminToken, async (req, res) => {
 app.patch('/api/admin/pricing/:service', verifyAdminToken, requireRole('admin'), validateRequest(updatePricingSchema), async (req, res) => {
   try {
     const { service } = req.params;
-    const { minPrice, maxPrice, description } = req.validatedBody;
+    const { price, description, duration } = req.validatedBody;
 
     // Validate service
     if (!['bridal', 'party', 'casual'].includes(service)) {
@@ -1536,23 +1610,19 @@ app.patch('/api/admin/pricing/:service', verifyAdminToken, requireRole('admin'),
     const updatedPricing = await Pricing.findOneAndUpdate(
       { service },
       {
-        minPrice,
-        maxPrice,
+        price,
         description: description || '',
+        duration: duration || '',
         updatedBy: req.admin.username,
         updatedAt: new Date()
       },
-      { new: true }
+      { new: true, upsert: true }
     );
-
-    if (!updatedPricing) {
-      return res.status(404).json({ success: false, message: 'Pricing not found' });
-    }
 
     auditLog('PRICING_UPDATE', req.admin.username, {
       service,
-      minPrice,
-      maxPrice
+      price,
+      duration
     });
 
     res.json({ success: true, pricing: updatedPricing });
@@ -1630,13 +1700,71 @@ app.get('/api/pricing/:service', async (req, res) => {
   }
 });
 
+// ========== AVAILABILITY ENDPOINTS ==========
+
+// GET /api/admin/availability - Retrieve business hours / lead time (requires JWT admin)
+app.get('/api/admin/availability', verifyAdminToken, async (req, res) => {
+  try {
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      let availability = await Availability.findOne();
+      if (!availability) {
+        availability = await Availability.create({});
+      }
+      return res.json({ success: true, availability });
+    }
+    res.json({ success: true, availability: availabilityMemory });
+  } catch (error) {
+    logger.error('Availability fetch error:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching availability' });
+  }
+});
+
+// PATCH /api/admin/availability - Update business hours / lead time (requires JWT admin)
+app.patch('/api/admin/availability', verifyAdminToken, requireRole('admin'), validateRequest(updateAvailabilitySchema), async (req, res) => {
+  try {
+    const { weekdayStart, weekdayEnd, weekendStart, weekendEnd, leadTimeDays } = req.validatedBody;
+    const updates = {
+      weekdayStart,
+      weekdayEnd,
+      weekendStart,
+      weekendEnd,
+      leadTimeDays,
+      updatedBy: req.admin.username,
+      updatedAt: new Date()
+    };
+
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      const availability = await Availability.findOneAndUpdate({}, updates, {
+        new: true,
+        upsert: true
+      });
+      auditLog('AVAILABILITY_UPDATE', req.admin.username, updates);
+      return res.json({ success: true, availability });
+    }
+
+    Object.assign(availabilityMemory, updates);
+    auditLog('AVAILABILITY_UPDATE', req.admin.username, updates);
+    res.json({ success: true, availability: availabilityMemory });
+  } catch (error) {
+    logger.error('Availability update error:', error.message);
+    res.status(500).json({ success: false, message: 'Error updating availability' });
+  }
+});
+
 // ========== EMAIL TEMPLATES ENDPOINTS ==========
+
+function isDbConnected() {
+  return !!(MONGO_URI && mongoose.connection.readyState === 1);
+}
 
 // GET /api/admin/email-templates - Retrieve all email templates (requires JWT admin)
 app.get('/api/admin/email-templates', verifyAdminToken, requireRole('admin'), async (req, res) => {
   try {
-    const templates = await EmailTemplate.find({}).select('-__v');
-    res.json({ success: true, templates });
+    if (isDbConnected()) {
+      const templates = await EmailTemplate.find({}).select('-__v');
+      return res.json({ success: true, templates });
+    }
+    res.json({ success: true, templates: emailTemplatesMemory });
   } catch (error) {
     logger.error('Get email templates error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to retrieve email templates' });
@@ -1647,12 +1775,19 @@ app.get('/api/admin/email-templates', verifyAdminToken, requireRole('admin'), as
 app.get('/api/email-templates/:type', async (req, res) => {
   try {
     const { type } = req.params;
-    const template = await EmailTemplate.findOne({ type }).select('-__v');
 
+    if (isDbConnected()) {
+      const template = await EmailTemplate.findOne({ type }).select('-__v');
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+      return res.json({ success: true, template });
+    }
+
+    const template = emailTemplatesMemory.find(t => t.type === type);
     if (!template) {
       return res.status(404).json({ success: false, message: 'Template not found' });
     }
-
     res.json({ success: true, template });
   } catch (error) {
     logger.error('Get email template error:', error.message);
@@ -1670,22 +1805,40 @@ app.put('/api/admin/email-templates/:type', verifyAdminToken, requireRole('admin
       return res.status(400).json({ success: false, message: validation.error.details[0].message });
     }
 
-    const template = await EmailTemplate.findOneAndUpdate(
-      { type },
-      {
-        subject: validation.value.subject,
-        body: validation.value.body,
-        updatedBy: req.admin.username,
-        updatedAt: new Date()
-      },
-      { new: true }
-    ).select('-__v');
+    if (isDbConnected()) {
+      const template = await EmailTemplate.findOneAndUpdate(
+        { type },
+        {
+          subject: validation.value.subject,
+          body: validation.value.body,
+          updatedBy: req.admin.username,
+          updatedAt: new Date()
+        },
+        { new: true }
+      ).select('-__v');
 
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+
+      auditLog('TEMPLATE_UPDATED', req.admin.username, {
+        type,
+        templateId: template._id,
+        updatedFields: ['subject', 'body']
+      });
+
+      return res.json({ success: true, message: 'Email template updated successfully', template });
+    }
+
+    const template = emailTemplatesMemory.find(t => t.type === type);
     if (!template) {
       return res.status(404).json({ success: false, message: 'Template not found' });
     }
+    template.subject = validation.value.subject;
+    template.body = validation.value.body;
+    template.updatedBy = req.admin.username;
+    template.updatedAt = new Date();
 
-    // Audit log
     auditLog('TEMPLATE_UPDATED', req.admin.username, {
       type,
       templateId: template._id,
@@ -1728,17 +1881,32 @@ app.patch('/api/admin/email-templates/:type', verifyAdminToken, requireRole('adm
     updates.updatedBy = req.admin.username;
     updates.updatedAt = new Date();
 
-    const template = await EmailTemplate.findOneAndUpdate(
-      { type },
-      updates,
-      { new: true }
-    ).select('-__v');
+    if (isDbConnected()) {
+      const template = await EmailTemplate.findOneAndUpdate(
+        { type },
+        updates,
+        { new: true }
+      ).select('-__v');
 
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Template not found' });
+      }
+
+      auditLog('TEMPLATE_UPDATED', req.admin.username, {
+        type,
+        templateId: template._id,
+        updatedFields: Object.keys(updates).filter(k => k !== 'updatedBy' && k !== 'updatedAt')
+      });
+
+      return res.json({ success: true, message: 'Email template updated successfully', template });
+    }
+
+    const template = emailTemplatesMemory.find(t => t.type === type);
     if (!template) {
       return res.status(404).json({ success: false, message: 'Template not found' });
     }
+    Object.assign(template, updates);
 
-    // Audit log
     auditLog('TEMPLATE_UPDATED', req.admin.username, {
       type,
       templateId: template._id,

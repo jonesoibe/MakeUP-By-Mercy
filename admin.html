@@ -582,12 +582,20 @@
         }
 
         .success-message {
+            /* Fixed positioning keeps the toast visible in the viewport
+               regardless of how far the page is scrolled, instead of
+               sitting in normal document flow near the top of the page. */
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            max-width: 400px;
             background-color: #d4edda;
             color: #155724;
-            padding: 15px;
+            padding: 15px 20px;
             border-radius: 5px;
-            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
             display: none;
+            z-index: 1000;
         }
 
         .success-message.show {
@@ -603,6 +611,14 @@
             to {
                 transform: translateY(0);
                 opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .success-message {
+                left: 16px;
+                right: 16px;
+                max-width: none;
             }
         }
 
@@ -648,7 +664,7 @@
                 <div class="header-right">
                     <div class="admin-user">
                         <i class="fas fa-user-circle" style="font-size: 20px;"></i>
-                        <span>Admin</span>
+                        <span id="admin-username-display">Admin</span>
                     </div>
                 </div>
             </div>

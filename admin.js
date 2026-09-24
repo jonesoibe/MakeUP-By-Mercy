@@ -13,6 +13,12 @@ window.addEventListener('load', () => {
     if (!adminToken) {
         window.location.href = '/admin-login.html';
     }
+
+    const usernameDisplay = document.getElementById('admin-username-display');
+    if (usernameDisplay) {
+        usernameDisplay.textContent = localStorage.getItem('adminUsername') || 'Admin';
+    }
+
     loadDashboardData();
 });
 
@@ -43,13 +49,34 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('✅ Save Email Template button listener attached');
     }
 
-    const saveAvailabilityBtn = Array.from(document.querySelectorAll('button')).find(btn =>
-                                 btn.textContent.includes('Save Availability'));
-    if (saveAvailabilityBtn) {
-        saveAvailabilityBtn.addEventListener('click', () => {
-            showSuccess('Availability saved successfully!');
+    // Close any open modal on Escape key, routing through each modal's own
+    // close function so related state (currentBookingId, message text) is
+    // reset the same way a click on its close button would reset it.
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (document.getElementById('message-modal').classList.contains('show')) {
+            closeMessageModal();
+        }
+        if (document.getElementById('booking-modal').classList.contains('show')) {
+            closeBookingModal();
+        }
+    });
+
+    // Close a modal when clicking its backdrop (outside the modal content)
+    document.getElementById('booking-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'booking-modal') closeBookingModal();
+    });
+    document.getElementById('message-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'message-modal') closeMessageModal();
+    });
+
+    // Manage tab: live search by booking number or customer name
+    const searchBookingInput = document.getElementById('search-booking');
+    if (searchBookingInput) {
+        searchBookingInput.addEventListener('input', (e) => {
+            renderManageResults(e.target.value.trim());
         });
-        console.log('✅ Save Availability button listener attached');
+        console.log('✅ Manage tab search box listener attached');
     }
 
     console.log('✅ Admin panel initialized with all event listeners');
@@ -81,6 +108,7 @@ function switchSection(section) {
     } else if (section === 'analytics') {
         loadAnalytics();
     } else if (section === 'settings') {
+        loadAvailability();
         loadPricing();
     }
 }
@@ -100,6 +128,8 @@ function switchTab(tabName) {
     // Load email template when tab is opened
     if (tabName === 'email-templates') {
         loadEmailTemplate();
+    } else if (tabName === 'manage') {
+        renderManageResults(document.getElementById('search-booking').value.trim());
     }
 }
 
@@ -243,6 +273,44 @@ function displayBookingsTable(bookings) {
     document.getElementById('bookings-table-container').innerHTML = html;
 }
 
+function renderManageResults(query) {
+    const container = document.getElementById('manage-content');
+    if (!container) return;
+
+    if (!query) {
+        container.innerHTML = '<p style="color: #7f8c8d; padding: 20px 0;">Start typing a booking number or customer name to search.</p>';
+        return;
+    }
+
+    const lowerQuery = query.toLowerCase();
+    const matches = allBookings.filter(b =>
+        (b.bookingNumber || '').toLowerCase().includes(lowerQuery) ||
+        (b.name || '').toLowerCase().includes(lowerQuery)
+    );
+
+    if (matches.length === 0) {
+        container.innerHTML = '<p style="color: #7f8c8d; padding: 20px 0;">No bookings match your search.</p>';
+        return;
+    }
+
+    let html = '<table class="bookings-table"><thead><tr><th>Booking ID</th><th>Client</th><th>Email</th><th>Service</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+    matches.forEach(booking => {
+        const dateObj = new Date(booking.date);
+        const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        html += `<tr>
+            <td><strong>${booking.bookingNumber}</strong></td>
+            <td>${booking.name}</td>
+            <td>${booking.email}</td>
+            <td>${booking.service.charAt(0).toUpperCase() + booking.service.slice(1)}</td>
+            <td>${dateStr}</td>
+            <td><span class="status-badge status-${booking.status}">${booking.status}</span></td>
+            <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${booking._id}')">View</button></td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
 function applyFilters() {
     const startDate = document.getElementById('filter-start-date').value;
     const endDate = document.getElementById('filter-end-date').value;
@@ -270,6 +338,10 @@ function applyFilters() {
 async function openBookingModal(bookingId) {
     try {
         const booking = allBookings.find(b => b._id === bookingId);
+        if (!booking) {
+            showSuccess('Could not find that booking. Try refreshing the page.', true);
+            return;
+        }
         currentBookingId = bookingId;
 
         const dateObj = new Date(booking.date);
@@ -319,14 +391,18 @@ async function confirmBooking() {
             }
         });
 
-        if (response.ok) {
+        const data = await response.json();
+        if (response.ok && data.success) {
             showSuccess('Booking confirmed successfully!');
             closeBookingModal();
             loadDashboardData();
             loadAllBookings();
+        } else {
+            showSuccess(data.message || 'Error confirming booking!', true);
         }
     } catch (error) {
         console.error('Error confirming booking:', error);
+        showSuccess('Error confirming booking!', true);
     }
 }
 
@@ -343,14 +419,18 @@ async function cancelBooking() {
             }
         });
 
-        if (response.ok) {
+        const data = await response.json();
+        if (response.ok && data.success) {
             showSuccess('Booking cancelled successfully!');
             closeBookingModal();
             loadDashboardData();
             loadAllBookings();
+        } else {
+            showSuccess(data.message || 'Error cancelling booking!', true);
         }
     } catch (error) {
         console.error('Error cancelling booking:', error);
+        showSuccess('Error cancelling booking!', true);
     }
 }
 
@@ -377,13 +457,17 @@ async function submitMessage() {
             body: JSON.stringify({ message })
         });
 
-        if (response.ok) {
+        const data = await response.json();
+        if (response.ok && data.success) {
             showSuccess('Message sent successfully!');
             closeMessageModal();
             closeBookingModal();
+        } else {
+            showSuccess(data.message || 'Error sending message!', true);
         }
     } catch (error) {
         console.error('Error sending message:', error);
+        showSuccess('Error sending message!', true);
     }
 }
 
@@ -443,14 +527,71 @@ async function loadAnalytics() {
             }
             document.getElementById('popular-service').textContent = maxService.charAt(0).toUpperCase() + maxService.slice(1);
             document.getElementById('popular-service-count').textContent = maxCount + ' bookings';
+
+            // Peak booking day (backend already computes this; it was
+            // previously fetched but never rendered)
+            document.getElementById('peak-day').textContent = data.peakDay || '-';
+            document.getElementById('peak-day-count').textContent = (data.peakDayCount || 0) + ' bookings';
+
+            // No rating data is collected anywhere in the system yet, so
+            // show this honestly rather than a fake number.
+            document.getElementById('avg-rating').textContent = 'N/A';
+            document.querySelector('#avg-rating').parentElement.querySelector('.stat-change').textContent = 'Not yet tracked';
         }
     } catch (error) {
         console.error('Error loading analytics:', error);
     }
 }
 
-function saveAvailability() {
-    showSuccess('Availability updated successfully!');
+async function loadAvailability() {
+    try {
+        const response = await fetch('/api/admin/availability', {
+            headers: {
+                'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+            }
+        });
+        const data = await response.json();
+
+        if (data.success && data.availability) {
+            const a = data.availability;
+            document.getElementById('weekday-start').value = a.weekdayStart;
+            document.getElementById('weekday-end').value = a.weekdayEnd;
+            document.getElementById('weekend-start').value = a.weekendStart;
+            document.getElementById('weekend-end').value = a.weekendEnd;
+            document.getElementById('lead-time').value = a.leadTimeDays;
+        }
+    } catch (error) {
+        console.error('Error loading availability:', error);
+    }
+}
+
+async function saveAvailability() {
+    try {
+        const weekdayStart = document.getElementById('weekday-start').value;
+        const weekdayEnd = document.getElementById('weekday-end').value;
+        const weekendStart = document.getElementById('weekend-start').value;
+        const weekendEnd = document.getElementById('weekend-end').value;
+        const leadTimeDays = parseInt(document.getElementById('lead-time').value, 10);
+
+        const response = await fetch('/api/admin/availability', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('adminToken')
+            },
+            body: JSON.stringify({ weekdayStart, weekdayEnd, weekendStart, weekendEnd, leadTimeDays })
+        });
+
+        const data = await response.json();
+        if (response.ok && data.success) {
+            showSuccess('✅ Availability updated successfully!');
+        } else {
+            showSuccess(data.message || 'Error saving availability!', true);
+        }
+    } catch (error) {
+        console.error('Error saving availability:', error);
+        showSuccess('Error saving availability!', true);
+    }
 }
 
 async function loadPricing() {
@@ -581,12 +722,11 @@ async function saveEmailTemplate() {
 
 async function loadEmailTemplate() {
     try {
-        const adminToken = localStorage.getItem('adminToken');
-        const response = await fetch('/api/admin/email-templates/confirmation', {
-            headers: {
-                'Authorization': 'Bearer ' + adminToken
-            }
-        });
+        // There is no GET /api/admin/email-templates/:type route (only the
+        // bulk /api/admin/email-templates and this public single-type
+        // lookup exist) - using the admin URL here always 404'd silently,
+        // leaving the form stuck on its hardcoded HTML defaults.
+        const response = await fetch('/api/email-templates/confirmation');
 
         const data = await response.json();
         if (data.success && data.template) {
