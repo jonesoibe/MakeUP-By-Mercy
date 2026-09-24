@@ -119,7 +119,14 @@ const transporter = nodemailer.createTransport({
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD
-  }
+  },
+  // Without explicit timeouts, nodemailer's defaults (up to 2 minutes for
+  // connectionTimeout) mean a stalled SMTP connection blocks whatever is
+  // awaiting sendMail() for that long. Bound it so a network issue fails
+  // fast and loud instead of hanging.
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000
 });
 
 // Test email connection
@@ -614,16 +621,29 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
 
     log('INFO', `New booking: ${booking.name} | ${booking.email} | ${booking.service} | ${booking.date}`);
 
-    // Send confirmation emails to both client and owner in parallel (2x speedup)
-    log('INFO', 'Sending confirmation emails...');
-    await Promise.all([
+    // The booking is already saved at this point, which is what actually
+    // matters to the customer. Sending email over SMTP is comparatively
+    // slow and occasionally unreliable (e.g. a stalled connection to
+    // Gmail), so it must not block the response - previously, awaiting
+    // this here meant a single slow/failing SMTP attempt held the
+    // customer on "Booking..." for up to nodemailer's full connection
+    // timeout. Fire the emails in the background instead, and log the
+    // outcome for follow-up rather than promising delivery that hasn't
+    // been confirmed yet.
+    Promise.all([
       sendConfirmationEmail(booking),
       sendMercyNotification(booking)
-    ]);
+    ]).then(([clientSent, ownerSent]) => {
+      if (!clientSent || !ownerSent) {
+        log('WARN', `Booking ${booking.bookingNumber} email delivery incomplete`, { clientSent, ownerSent });
+      }
+    }).catch((error) => {
+      log('ERROR', `Booking ${booking.bookingNumber} email delivery threw unexpectedly:`, error.message);
+    });
 
     res.status(201).json({
       success: true,
-      message: `Booking confirmed! Confirmation emails have been sent to you and Mercy.`,
+      message: `Booking confirmed! A confirmation email is on its way to you and Mercy.`,
       booking: {
         id: booking.id,
         bookingNumber: booking.bookingNumber,
