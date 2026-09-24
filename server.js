@@ -855,6 +855,36 @@ async function initializeDefaultAdmin() {
   }
 }
 
+// Resume the booking number counter from the database on startup.
+// Without this, bookingCounter always restarts at 1000 after every
+// restart/deploy, which would eventually mint a bookingNumber that
+// collides with one already in the database (the schema's unique
+// constraint would then reject the save) - the same class of booking
+// ID integrity problem as the legacy "undefined" bookingNumber records.
+async function initializeBookingCounter() {
+  try {
+    if (MONGO_URI && mongoose.connection.readyState === 1) {
+      const existing = await Booking.find(
+        { bookingNumber: { $regex: /^MKP-\d+$/ } },
+        { bookingNumber: 1 }
+      );
+      let maxNumber = 0;
+      existing.forEach(b => {
+        const num = parseInt(b.bookingNumber.split('-')[1], 10);
+        if (!isNaN(num) && num > maxNumber) {
+          maxNumber = num;
+        }
+      });
+      if (maxNumber > bookingCounter) {
+        bookingCounter = maxNumber;
+        log('INFO', `Booking counter resumed from database at ${bookingCounter}`);
+      }
+    }
+  } catch (error) {
+    log('ERROR', 'Error initializing booking counter:', error.message);
+  }
+}
+
 // Verify JWT Token
 function verifyAdminToken(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -1925,6 +1955,7 @@ mongoose.connection.once('connected', () => {
   initializeDefaultAdmin();
   initializeDefaultPricing();
   initializeDefaultEmailTemplates();
+  initializeBookingCounter();
 });
 
 // Serve index.html for root path
