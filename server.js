@@ -91,6 +91,7 @@ if (MONGO_URI) {
 // ========== BOOKING SCHEMA ==========
 const bookingSchema = new mongoose.Schema({
   id: { type: Number, unique: true, required: true },
+  bookingNumber: { type: String, unique: true, required: true },
   name: { type: String, required: true },
   email: { type: String, required: true },
   phone: { type: String, required: true },
@@ -100,7 +101,8 @@ const bookingSchema = new mongoose.Schema({
   bookedAt: { type: Date, default: Date.now },
   status: { type: String, default: 'confirmed' },
   emailSent: { type: Boolean, default: false },
-  ownerEmailSent: { type: Boolean, default: false }
+  ownerEmailSent: { type: Boolean, default: false },
+  qrCode: { type: String, default: null }
 });
 
 const Booking = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
@@ -524,6 +526,10 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
       status: 'confirmed'
     };
 
+    // Pre-generate and cache QR code for faster PDF generation
+    const qrCode = await generateQRCode(booking.bookingNumber);
+    booking.qrCode = qrCode || null;
+
     // Save to database
     if (MONGO_URI && mongoose.connection.readyState === 1) {
       const newBooking = new Booking(booking);
@@ -536,10 +542,12 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
 
     log('INFO', `New booking: ${booking.name} | ${booking.email} | ${booking.service} | ${booking.date}`);
 
-    // Send confirmation emails to both client and owner
+    // Send confirmation emails to both client and owner in parallel (2x speedup)
     log('INFO', 'Sending confirmation emails...');
-    await sendConfirmationEmail(booking);
-    await sendMercyNotification(booking);
+    await Promise.all([
+      sendConfirmationEmail(booking),
+      sendMercyNotification(booking)
+    ]);
 
     res.status(201).json({
       success: true,
@@ -1159,22 +1167,26 @@ async function generateReceiptPDF(booking) {
       doc.text(`Status: ${booking.status.toUpperCase()}`, doc.y + 5);
       doc.text(`Booked On: ${new Date(booking.bookedAt).toLocaleString()}`, doc.y + 5);
 
-      // QR Code
-      generateQRCode(`${booking.bookingNumber}`).then((qrCode) => {
-        if (qrCode) {
-          const img = Buffer.from(qrCode.replace('data:image/png;base64,', ''), 'base64');
+      // QR Code (use cached version for better performance)
+      if (booking.qrCode) {
+        try {
+          const img = Buffer.from(booking.qrCode.replace('data:image/png;base64,', ''), 'base64');
           doc.image(img, doc.page.margins.left, doc.y + 20, { width: 100, height: 100 });
+          doc.fontSize(9).text('Scan QR code to track your booking', doc.x + 110, doc.y - 80);
+        } catch (error) {
+          log('WARN', 'Failed to embed cached QR code in PDF:', error.message);
+          doc.fontSize(9).text('Booking ID: ' + booking.bookingNumber, doc.x + 110, doc.y - 80);
         }
+      } else {
+        doc.fontSize(9).text('Booking ID: ' + booking.bookingNumber, doc.x + 110, doc.y);
+      }
 
-        doc.fontSize(9).text('Scan QR code to track your booking', doc.x + 110, doc.y - 80);
+      // Footer
+      doc.fontSize(8).font('Helvetica-Oblique');
+      doc.text('Thank you for booking with MakeUP By Mercy!', { align: 'center', y: 750 });
+      doc.text('For more details, visit our website or contact us on WhatsApp', { align: 'center' });
 
-        // Footer
-        doc.fontSize(8).font('Helvetica-Oblique');
-        doc.text('Thank you for booking with MakeUP By Mercy!', { align: 'center', y: 750 });
-        doc.text('For more details, visit our website or contact us on WhatsApp', { align: 'center' });
-
-        doc.end();
-      });
+      doc.end();
     } catch (error) {
       log('ERROR', 'Receipt PDF generation error:', error.message);
       reject(error);
