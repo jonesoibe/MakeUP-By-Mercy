@@ -204,7 +204,20 @@ const bookingValidationSchema = Joi.object({
   phone: Joi.string().pattern(/^[0-9+\-\s()]+$/).min(10).max(20).required(),
   country: Joi.string().trim().max(50).default('Nigeria'),
   service: Joi.string().valid('bridal', 'party', 'casual').required(),
-  date: Joi.date().iso().min('now').required()
+  // The booking form only collects a date (no time-of-day), so the client
+  // sends a date-only string like "2026-09-24", which Joi/JS parse as
+  // midnight UTC. Comparing that against .min('now') (the exact current
+  // instant) meant any same-day booking always failed, since midnight is
+  // always earlier than "right now" later that day. Compare against the
+  // start of today (UTC) instead, recomputed on every request.
+  date: Joi.date().iso().required().custom((value, helpers) => {
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
+    if (value < startOfToday) {
+      return helpers.message('"date" must be today or in the future');
+    }
+    return value;
+  }, 'reject dates before today')
 });
 
 // Admin login validation schema

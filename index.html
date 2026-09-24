@@ -2351,8 +2351,8 @@
             <div class="pricing-card">
                 <div class="pricing-header">
                     <h3>Bridal Makeup</h3>
-                    <p class="pricing-price">₦15,000 - ₦25,000</p>
-                    <p class="pricing-duration">60-90 minutes</p>
+                    <p class="pricing-price" id="pricing-price-bridal">₦15,000 - ₦25,000</p>
+                    <p class="pricing-duration" id="pricing-duration-bridal">60-90 minutes</p>
                 </div>
                 <div class="pricing-features">
                     <h4>Includes:</h4>
@@ -2372,8 +2372,8 @@
                 <div class="pricing-badge">Most Popular</div>
                 <div class="pricing-header">
                     <h3>Party Makeup</h3>
-                    <p class="pricing-price">₦8,000 - ₦15,000</p>
-                    <p class="pricing-duration">45-60 minutes</p>
+                    <p class="pricing-price" id="pricing-price-party">₦8,000 - ₦15,000</p>
+                    <p class="pricing-duration" id="pricing-duration-party">45-60 minutes</p>
                 </div>
                 <div class="pricing-features">
                     <h4>Includes:</h4>
@@ -2392,8 +2392,8 @@
             <div class="pricing-card">
                 <div class="pricing-header">
                     <h3>Casual Makeup</h3>
-                    <p class="pricing-price">₦5,000 - ₦10,000</p>
-                    <p class="pricing-duration">30-45 minutes</p>
+                    <p class="pricing-price" id="pricing-price-casual">₦5,000 - ₦10,000</p>
+                    <p class="pricing-duration" id="pricing-duration-casual">30-45 minutes</p>
                 </div>
                 <div class="pricing-features">
                     <h4>Includes:</h4>
@@ -2773,9 +2773,15 @@
                 return false;
             }
 
+            // value is a date-only string (YYYY-MM-DD) from <input type="date">,
+            // which new Date(value) parses as UTC midnight. Comparing that
+            // against a LOCAL midnight "today" caused false rejections of
+            // today's date for browsers in timezones behind UTC. Compare
+            // against UTC midnight of today instead, matching how the value
+            // will be parsed here and on the server.
             const selectedDate = new Date(value);
             const today = new Date();
-            today.setHours(0, 0, 0, 0);
+            today.setUTCHours(0, 0, 0, 0);
             const maxDate = new Date();
             maxDate.setFullYear(maxDate.getFullYear() + 1);
 
@@ -2907,6 +2913,36 @@
 
         // Check server connection when page loads
         document.addEventListener('DOMContentLoaded', checkServer);
+
+        // Load current pricing from the admin-managed Pricing API and
+        // reflect it in the pricing section. Without this, the prices
+        // shown here were static HTML text that never changed even after
+        // an admin updated pricing in the admin panel.
+        async function loadPublicPricing() {
+            const services = ['bridal', 'party', 'casual'];
+            await Promise.all(services.map(async (service) => {
+                try {
+                    const response = await fetch(`${API_URL}/pricing/${service}`);
+                    const data = await response.json();
+                    if (!data.success || !data.pricing) return;
+
+                    const { price, duration } = data.pricing;
+                    const priceEl = document.getElementById(`pricing-price-${service}`);
+                    const durationEl = document.getElementById(`pricing-duration-${service}`);
+
+                    if (priceEl && typeof price === 'number') {
+                        priceEl.textContent = '₦' + price.toLocaleString();
+                    }
+                    if (durationEl && duration) {
+                        durationEl.textContent = duration;
+                    }
+                } catch (error) {
+                    console.warn(`Could not load pricing for ${service}:`, error);
+                }
+            }));
+        }
+
+        document.addEventListener('DOMContentLoaded', loadPublicPricing);
 
         // Show confirmation modal
         function showConfirmationModal(booking) {
