@@ -7,6 +7,18 @@ let bookingPrices = {
     casual: 10000
 };
 
+// Escape user-supplied text before inserting into innerHTML, to prevent stored XSS
+// via free-text booking fields (name, country, etc.) that a public visitor controls.
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Admin authentication check
 window.addEventListener('load', () => {
     const adminToken = localStorage.getItem('adminToken');
@@ -145,9 +157,9 @@ async function loadUpcomingAppointments() {
                 const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
                 html += `<tr>
                     <td>${dateStr}</td>
-                    <td>${apt.name}</td>
+                    <td>${escapeHtml(apt.name)}</td>
                     <td>${apt.service.charAt(0).toUpperCase() + apt.service.slice(1)}</td>
-                    <td>${apt.phone}</td>
+                    <td>${escapeHtml(apt.phone)}</td>
                     <td><span class="status-badge status-${apt.status}">${apt.status}</span></td>
                 </tr>`;
             });
@@ -179,12 +191,12 @@ async function loadRecentBookings() {
                 const dateObj = new Date(booking.date);
                 const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
                 html += `<tr>
-                    <td><strong>${booking.bookingNumber}</strong></td>
-                    <td>${booking.name}</td>
-                    <td>${booking.email}</td>
+                    <td><strong>${escapeHtml(booking.bookingNumber)}</strong></td>
+                    <td>${escapeHtml(booking.name)}</td>
+                    <td>${escapeHtml(booking.email)}</td>
                     <td>${booking.service.charAt(0).toUpperCase() + booking.service.slice(1)}</td>
                     <td>${dateStr}</td>
-                    <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${booking._id}')">View</button></td>
+                    <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${booking._id || booking.id}')">View</button></td>
                 </tr>`;
             });
         } else {
@@ -225,14 +237,14 @@ function displayBookingsTable(bookings) {
             const dateObj = new Date(booking.date);
             const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
             html += `<tr>
-                <td><strong>${booking.bookingNumber}</strong></td>
-                <td>${booking.name}</td>
-                <td>${booking.email}</td>
-                <td>${booking.phone}</td>
+                <td><strong>${escapeHtml(booking.bookingNumber)}</strong></td>
+                <td>${escapeHtml(booking.name)}</td>
+                <td>${escapeHtml(booking.email)}</td>
+                <td>${escapeHtml(booking.phone)}</td>
                 <td>${booking.service.charAt(0).toUpperCase() + booking.service.slice(1)}</td>
                 <td>${dateStr}</td>
                 <td><span class="status-badge status-${booking.status}">${booking.status}</span></td>
-                <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${booking._id}')">View</button></td>
+                <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${booking._id || booking.id}')">View</button></td>
             </tr>`;
         });
     } else {
@@ -269,7 +281,7 @@ function applyFilters() {
 
 async function openBookingModal(bookingId) {
     try {
-        const booking = allBookings.find(b => b._id === bookingId);
+        const booking = allBookings.find(b => b._id === bookingId || String(b.id) === bookingId);
         currentBookingId = bookingId;
 
         const dateObj = new Date(booking.date);
@@ -277,15 +289,15 @@ async function openBookingModal(bookingId) {
 
         let html = `
             <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
-                <h3 style="color: var(--primary); margin-bottom: 10px;">${booking.bookingNumber}</h3>
+                <h3 style="color: var(--primary); margin-bottom: 10px;">${escapeHtml(booking.bookingNumber)}</h3>
                 <p><strong>Status:</strong> <span class="status-badge status-${booking.status}">${booking.status}</span></p>
             </div>
             <div style="margin-bottom: 15px;">
                 <h4 style="margin-bottom: 10px;">Client Information</h4>
-                <p><strong>Name:</strong> ${booking.name}</p>
-                <p><strong>Email:</strong> ${booking.email}</p>
-                <p><strong>Phone:</strong> ${booking.phone}</p>
-                <p><strong>Country:</strong> ${booking.country}</p>
+                <p><strong>Name:</strong> ${escapeHtml(booking.name)}</p>
+                <p><strong>Email:</strong> ${escapeHtml(booking.email)}</p>
+                <p><strong>Phone:</strong> ${escapeHtml(booking.phone)}</p>
+                <p><strong>Country:</strong> ${escapeHtml(booking.country)}</p>
             </div>
             <div style="margin-bottom: 15px;">
                 <h4 style="margin-bottom: 10px;">Appointment Details</h4>
@@ -395,11 +407,23 @@ function exportBookings(format) {
     }
 }
 
+// Neutralize CSV/formula injection: a field starting with =, +, -, @, tab or CR is
+// interpreted as a formula by Excel/Sheets when the exported file is opened. Prefixing
+// with a single quote forces text interpretation. Embedded quotes are escaped per the
+// CSV spec so the prefix (and the value itself) can't break the surrounding quoting.
+function sanitizeCsvField(value) {
+    let str = value === null || value === undefined ? '' : String(value);
+    if (/^[=+\-@\t\r]/.test(str)) {
+        str = "'" + str;
+    }
+    return str.replace(/"/g, '""');
+}
+
 function exportToCSV() {
     let csv = 'Booking ID,Client Name,Email,Phone,Country,Service,Date,Status\n';
     allBookings.forEach(booking => {
         const dateStr = new Date(booking.date).toLocaleDateString();
-        csv += `"${booking.bookingNumber}","${booking.name}","${booking.email}","${booking.phone}","${booking.country}","${booking.service}","${dateStr}","${booking.status}"\n`;
+        csv += `"${sanitizeCsvField(booking.bookingNumber)}","${sanitizeCsvField(booking.name)}","${sanitizeCsvField(booking.email)}","${sanitizeCsvField(booking.phone)}","${sanitizeCsvField(booking.country)}","${sanitizeCsvField(booking.service)}","${sanitizeCsvField(dateStr)}","${sanitizeCsvField(booking.status)}"\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -469,13 +493,11 @@ async function loadPricing() {
         if (data.success && data.pricing) {
             data.pricing.forEach(service => {
                 const serviceName = service.service || service.name;
-                if (document.getElementById(`price-${serviceName}`)) {
-                    document.getElementById(`price-${serviceName}`).value = service.price || service.minPrice || '';
+                if (document.getElementById(`minprice-${serviceName}`)) {
+                    document.getElementById(`minprice-${serviceName}`).value = service.minPrice ?? '';
+                    document.getElementById(`maxprice-${serviceName}`).value = service.maxPrice ?? '';
                     if (document.getElementById(`desc-${serviceName}`)) {
                         document.getElementById(`desc-${serviceName}`).value = service.description || '';
-                    }
-                    if (document.getElementById(`duration-${serviceName}`)) {
-                        document.getElementById(`duration-${serviceName}`).value = service.duration || '';
                     }
                     if (document.getElementById(`${serviceName}-desc`)) {
                         document.getElementById(`${serviceName}-desc`).textContent = service.description || '';
@@ -484,7 +506,7 @@ async function loadPricing() {
             });
             bookingPrices = data.pricing.reduce((acc, s) => {
                 const serviceName = s.service || s.name;
-                acc[serviceName] = s.price || s.minPrice || 0;
+                acc[serviceName] = { minPrice: s.minPrice, maxPrice: s.maxPrice };
                 return acc;
             }, {});
         }
@@ -502,12 +524,16 @@ async function savePricing() {
         const adminToken = localStorage.getItem('adminToken');
 
         for (const service of services) {
-            const price = parseInt(document.getElementById(`price-${service}`).value);
+            const minPrice = parseInt(document.getElementById(`minprice-${service}`).value);
+            const maxPrice = parseInt(document.getElementById(`maxprice-${service}`).value);
             const description = document.getElementById(`desc-${service}`).value;
-            const duration = document.getElementById(`duration-${service}`).value;
 
-            if (isNaN(price) || price < 0) {
+            if (isNaN(minPrice) || minPrice < 0 || isNaN(maxPrice) || maxPrice < 0) {
                 showSuccess(`Invalid price for ${service}!`, true);
+                return;
+            }
+            if (minPrice > maxPrice) {
+                showSuccess(`Min price cannot exceed max price for ${service}!`, true);
                 return;
             }
 
@@ -517,7 +543,7 @@ async function savePricing() {
                     'Content-Type': 'application/json',
                     'Authorization': 'Bearer ' + adminToken
                 },
-                body: JSON.stringify({ price, description, duration })
+                body: JSON.stringify({ minPrice, maxPrice, description })
             });
 
             const data = await response.json();
@@ -529,9 +555,9 @@ async function savePricing() {
 
         // Update local prices
         bookingPrices = {
-            bridal: parseInt(document.getElementById('price-bridal').value),
-            party: parseInt(document.getElementById('price-party').value),
-            casual: parseInt(document.getElementById('price-casual').value)
+            bridal: { minPrice: parseInt(document.getElementById('minprice-bridal').value), maxPrice: parseInt(document.getElementById('maxprice-bridal').value) },
+            party: { minPrice: parseInt(document.getElementById('minprice-party').value), maxPrice: parseInt(document.getElementById('maxprice-party').value) },
+            casual: { minPrice: parseInt(document.getElementById('minprice-casual').value), maxPrice: parseInt(document.getElementById('maxprice-casual').value) }
         };
 
         showSuccess('✅ All pricing updated successfully in database!');

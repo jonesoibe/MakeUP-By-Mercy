@@ -233,7 +233,7 @@ const createAdminSchema = Joi.object({
 const updatePricingSchema = Joi.object({
   minPrice: Joi.number().min(0).required(),
   maxPrice: Joi.number().min(0).required(),
-  description: Joi.string().max(500).optional()
+  description: Joi.string().max(500).allow('').optional()
 }).custom((value, helpers) => {
   if (value.minPrice > value.maxPrice) {
     return helpers.error('any.invalid');
@@ -973,7 +973,7 @@ app.patch('/api/admin/bookings/:id/confirm', verifyAdminToken, async (req, res) 
     if (MONGO_URI && mongoose.connection.readyState === 1) {
       booking = await Booking.findByIdAndUpdate(bookingId, { status: 'confirmed' }, { new: true });
     } else {
-      const booking_obj = bookings.find(b => b._id === bookingId);
+      const booking_obj = bookings.find(b => b.id === parseInt(bookingId));
       if (booking_obj) {
         booking_obj.status = 'confirmed';
         booking = booking_obj;
@@ -1001,7 +1001,7 @@ app.patch('/api/admin/bookings/:id/cancel', verifyAdminToken, async (req, res) =
     if (MONGO_URI && mongoose.connection.readyState === 1) {
       booking = await Booking.findByIdAndUpdate(bookingId, { status: 'cancelled' }, { new: true });
     } else {
-      const booking_obj = bookings.find(b => b._id === bookingId);
+      const booking_obj = bookings.find(b => b.id === parseInt(bookingId));
       if (booking_obj) {
         booking_obj.status = 'cancelled';
         booking = booking_obj;
@@ -1026,7 +1026,7 @@ app.post('/api/admin/bookings/:id/message', verifyAdminToken, async (req, res) =
     const bookingId = req.params.id;
     const { message } = req.body;
 
-    let booking = bookings.find(b => b._id === bookingId);
+    let booking = bookings.find(b => b.id === parseInt(bookingId));
     if (!booking && MONGO_URI && mongoose.connection.readyState === 1) {
       booking = await Booking.findById(bookingId);
     }
