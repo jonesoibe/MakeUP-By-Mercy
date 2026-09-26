@@ -539,6 +539,14 @@ let availabilityMemory = {
   updatedAt: new Date()
 };
 
+// In-memory pricing (fallback if MongoDB not connected, e.g. briefly after
+// a cold start before Mongoose finishes reconnecting)
+let pricingMemory = [
+  { service: 'bridal', price: 25000, duration: '2-3 hours', description: 'Bridal makeup and styling', updatedBy: 'system', updatedAt: new Date() },
+  { service: 'party', price: 15000, duration: '1.5-2 hours', description: 'Party and event makeup', updatedBy: 'system', updatedAt: new Date() },
+  { service: 'casual', price: 10000, duration: '1-1.5 hours', description: 'Casual daily makeup', updatedBy: 'system', updatedAt: new Date() }
+];
+
 // API Routes
 
 // GET all bookings (admin route)
@@ -1634,12 +1642,7 @@ app.get('/api/admin/pricing', verifyAdminToken, async (req, res) => {
       const pricing = await Pricing.find().sort({ service: 1 });
       res.json({ success: true, pricing });
     } else {
-      // Fallback for development
-      res.json({ success: true, pricing: [
-        { service: 'bridal', minPrice: 15000, maxPrice: 25000 },
-        { service: 'party', minPrice: 8000, maxPrice: 15000 },
-        { service: 'casual', minPrice: 5000, maxPrice: 10000 }
-      ]});
+      res.json({ success: true, pricing: pricingMemory });
     }
   } catch (error) {
     logger.error('Pricing fetch error:', error.message);
@@ -1659,7 +1662,18 @@ app.patch('/api/admin/pricing/:service', verifyAdminToken, requireRole('admin'),
     }
 
     if (!MONGO_URI || mongoose.connection.readyState !== 1) {
-      return res.status(400).json({ success: false, message: 'Database required for pricing management' });
+      const entry = pricingMemory.find(p => p.service === service);
+      if (!entry) {
+        return res.status(404).json({ success: false, message: 'Pricing not found' });
+      }
+      entry.price = price;
+      entry.description = description || '';
+      entry.duration = duration || '';
+      entry.updatedBy = req.admin.username;
+      entry.updatedAt = new Date();
+
+      auditLog('PRICING_UPDATE', req.admin.username, { service, price, duration });
+      return res.json({ success: true, pricing: entry });
     }
 
     const updatedPricing = await Pricing.findOneAndUpdate(
