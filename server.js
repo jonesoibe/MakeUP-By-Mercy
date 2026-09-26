@@ -527,7 +527,7 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
     };
 
     // Pre-generate and cache QR code for faster PDF generation
-    const qrCode = await generateQRCode(booking.bookingNumber);
+    const qrCode = await generateQRCode(buildBookingQrPayload(booking));
     booking.qrCode = qrCode || null;
 
     // Save to database
@@ -1136,6 +1136,21 @@ async function generateQRCode(data) {
   }
 }
 
+// Build the JSON payload encoded into a booking's QR code, so scanning it
+// surfaces the booking details directly rather than just a reference number.
+function buildBookingQrPayload(booking) {
+  return JSON.stringify({
+    bookingNumber: booking.bookingNumber,
+    name: booking.name,
+    email: booking.email,
+    phone: booking.phone,
+    country: booking.country,
+    service: booking.service,
+    date: booking.date,
+    status: booking.status
+  });
+}
+
 // Generate Receipt as Base64
 async function generateReceiptPDF(booking) {
   return new Promise((resolve, reject) => {
@@ -1261,7 +1276,7 @@ app.get('/api/bookings/:id/receipt/image', verifyAdminToken, async (req, res) =>
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    const qrCode = await generateQRCode(`${booking.bookingNumber}`);
+    const qrCode = await generateQRCode(buildBookingQrPayload(booking));
     if (!qrCode) {
       return res.status(500).json({ success: false, message: 'Error generating QR code' });
     }
