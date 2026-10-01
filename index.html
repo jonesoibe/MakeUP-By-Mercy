@@ -849,7 +849,7 @@
             .nav-links, .nav-cta { display: none; }
             .menu-toggle { display: block; }
 
-            nav.menu-open { color: var(--cream); background: transparent; border-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
+            nav.menu-open { z-index: 70; color: var(--cream); background: transparent; border-color: transparent; -webkit-backdrop-filter: none; backdrop-filter: none; }
 
             .mobile-panel {
                 position: fixed;
@@ -1721,6 +1721,12 @@
             // Hero entrance
             requestAnimationFrame(() => requestAnimationFrame(() => hero.classList.add('is-ready')));
 
+            // The slow settle transition is for the entrance only. Once it ends,
+            // drop it so scroll parallax tracks the scroll position directly.
+            if (heroImg) {
+                heroImg.addEventListener('transitionend', () => { heroImg.style.transition = 'none'; }, { once: true });
+            }
+
             // Reveal on scroll
             const revealObserver = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
@@ -1771,6 +1777,9 @@
                 document.body.style.overflow = open ? 'hidden' : '';
             }
             toggle.addEventListener('click', () => setMenu(!panel.classList.contains('open')));
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && panel.classList.contains('open')) setMenu(false);
+            });
             panel.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setMenu(false)));
 
             // Pre-select a service from the pricing links
