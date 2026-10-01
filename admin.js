@@ -189,7 +189,7 @@ async function loadUpcomingAppointments() {
         document.getElementById('upcoming-appointments').innerHTML = html;
     } catch (error) {
         console.error('Error loading appointments:', error);
-        document.getElementById('upcoming-appointments').innerHTML = '<p style="color: #e74c3c;">Error loading appointments</p>';
+        document.getElementById('upcoming-appointments').innerHTML = '<p style="color: var(--danger);">Error loading appointments</p>';
     }
 }
 
@@ -225,7 +225,7 @@ async function loadRecentBookings() {
         document.getElementById('recent-bookings').innerHTML = html;
     } catch (error) {
         console.error('Error loading recent bookings:', error);
-        document.getElementById('recent-bookings').innerHTML = '<p style="color: #e74c3c;">Error loading bookings</p>';
+        document.getElementById('recent-bookings').innerHTML = '<p style="color: var(--danger);">Error loading bookings</p>';
     }
 }
 
@@ -278,7 +278,7 @@ function renderManageResults(query) {
     if (!container) return;
 
     if (!query) {
-        container.innerHTML = '<p style="color: #7f8c8d; padding: 20px 0;">Start typing a booking number or customer name to search.</p>';
+        container.innerHTML = '<p style="color: var(--muted); padding: 20px 0;">Start typing a booking number or customer name to search.</p>';
         return;
     }
 
@@ -289,7 +289,7 @@ function renderManageResults(query) {
     );
 
     if (matches.length === 0) {
-        container.innerHTML = '<p style="color: #7f8c8d; padding: 20px 0;">No bookings match your search.</p>';
+        container.innerHTML = '<p style="color: var(--muted); padding: 20px 0;">No bookings match your search.</p>';
         return;
     }
 
@@ -348,7 +348,7 @@ async function openBookingModal(bookingId) {
         const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
         let html = `
-            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+            <div style="background-color: rgba(255,255,255,0.55); border: 1px solid var(--line); padding: 16px; border-radius: 4px; margin-bottom: 15px;">
                 <h3 style="color: var(--primary); margin-bottom: 10px;">${booking.bookingNumber}</h3>
                 <p><strong>Status:</strong> <span class="status-badge status-${booking.status}">${booking.status}</span></p>
             </div>
@@ -743,10 +743,10 @@ function showSuccess(message, isError = false) {
     document.getElementById('success-text').textContent = message;
     successEl.classList.add('show');
     if (isError) {
-        successEl.style.backgroundColor = '#e74c3c';
+        successEl.style.backgroundColor = '#8f3434';
         successEl.style.color = 'white';
     } else {
-        successEl.style.backgroundColor = '#27ae60';
+        successEl.style.backgroundColor = '#4a3a33';
         successEl.style.color = 'white';
     }
     setTimeout(() => successEl.classList.remove('show'), 4000);

@@ -5,210 +5,192 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MakeUP By Mercy - Admin Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --cream: #f3efe8;
+            --sand: #e9e2d7;
+            --mocha: #4a3a33;
+            --mocha-deep: #2e2420;
+            --ink: #2b2328;
+            --muted: #6b5f5b;
+            --clay: #8c6a5a;
+            --blush: #d8b9a8;
+            --line: rgba(43, 35, 40, 0.14);
+            --border: rgba(43, 35, 40, 0.22);
+            --serif: 'Cormorant Garamond', 'Times New Roman', serif;
+            --sans: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
         }
 
-        :root {
-            --primary: #cc3380;
-            --dark: #2c3e50;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, var(--primary) 0%, #8b2667 100%);
+            font-family: var(--sans);
+            font-size: 15px;
+            line-height: 1.55;
+            color: var(--ink);
+            background: var(--mocha-deep);
             min-height: 100vh;
+            min-height: 100svh;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 24px 0;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
+
+        :focus-visible { outline: 2px solid var(--clay); outline-offset: 2px; }
+        ::selection { background: var(--blush); color: var(--mocha-deep); }
 
         .login-container {
-            background: white;
-            padding: 40px;
-            border-radius: 8px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            max-width: 400px;
-            width: 90%;
+            background: var(--cream);
+            padding: clamp(28px, 6vw, 48px);
+            border-radius: 4px;
+            max-width: 440px;
+            width: calc(100% - 32px);
+            animation: popIn 520ms var(--ease-out);
         }
 
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
+        @keyframes popIn {
+            from { opacity: 0; transform: translateY(14px) scale(0.98); }
+            to { opacity: 1; transform: none; }
         }
 
-        .login-header i {
-            font-size: 48px;
-            color: var(--primary);
-            margin-bottom: 15px;
+        .login-header { text-align: left; margin-bottom: 32px; }
+
+        .login-header .eyebrow {
+            display: block;
+            margin-bottom: 14px;
+            font-size: 0.6875rem;
+            font-weight: 500;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--clay);
         }
 
         .login-header h1 {
-            color: var(--dark);
-            font-size: 24px;
-            margin-bottom: 10px;
+            font-family: var(--serif);
+            font-weight: 300;
+            font-size: clamp(2.6rem, 8vw, 3.5rem);
+            line-height: 1;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
         }
 
-        .login-header p {
-            color: #7f8c8d;
-            font-size: 14px;
-        }
+        .login-header h1 em { font-style: italic; }
+        .login-header p { color: var(--muted); font-size: 0.9375rem; }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+        .form-group { margin-bottom: 22px; }
 
         label {
             display: block;
             margin-bottom: 8px;
+            font-size: 0.6875rem;
             font-weight: 500;
-            color: var(--dark);
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--muted);
         }
 
         input[type="text"],
         input[type="password"] {
             width: 100%;
-            padding: 12px;
-            border: 1px solid #bdc3c7;
-            border-radius: 5px;
-            font-size: 14px;
+            padding: 12px 0;
+            border: 0;
+            border-bottom: 1px solid var(--border);
+            border-radius: 0;
+            background: transparent;
+            color: var(--ink);
+            font-size: 1rem;
             font-family: inherit;
-            transition: all 0.3s ease;
+            transition: border-color 200ms ease;
         }
 
         input[type="text"]:focus,
-        input[type="password"]:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(204, 51, 128, 0.1);
-        }
+        input[type="password"]:focus { outline: none; border-color: var(--ink); }
 
         .login-btn {
             width: 100%;
-            padding: 12px;
-            background: linear-gradient(135deg, var(--primary) 0%, #8b2667 100%);
-            color: white;
+            padding: 16px;
+            background: var(--ink);
+            color: var(--cream);
             border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            font-weight: 600;
+            border-radius: 99px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            font-family: inherit;
             cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 10px;
+            margin-top: 8px;
+            transition: background-color 200ms ease, transform 160ms ease-out, opacity 200ms ease;
         }
 
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(204, 51, 128, 0.3);
-        }
+        .login-btn:active { transform: scale(0.97); }
+        @media (hover: hover) { .login-btn:hover { background: var(--mocha); } }
+        .login-btn.loading { opacity: 0.6; cursor: not-allowed; }
 
-        .login-btn:active {
-            transform: translateY(0);
-        }
-
-        .login-btn.loading {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-
-        .error-message {
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 12px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            display: none;
-            border: 1px solid #f5c6cb;
-        }
-
-        .error-message.show {
-            display: block;
-            animation: slideIn 0.3s ease;
-        }
-
+        .error-message,
         .success-message {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 12px;
-            border-radius: 5px;
+            padding: 12px 14px;
+            border-radius: 6px;
             margin-bottom: 20px;
             display: none;
-            border: 1px solid #c3e6cb;
+            font-size: 0.875rem;
         }
 
-        .success-message.show {
-            display: block;
-            animation: slideIn 0.3s ease;
-        }
+        .error-message { background: rgba(166, 61, 61, 0.1); color: #8f3434; border: 1px solid rgba(166, 61, 61, 0.3); }
+        .success-message { background: rgba(108, 125, 92, 0.14); color: #4f6340; border: 1px solid rgba(108, 125, 92, 0.35); }
+
+        .error-message.show,
+        .success-message.show { display: block; animation: slideIn 280ms var(--ease-out); }
 
         @keyframes slideIn {
-            from {
-                transform: translateY(-20px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
+            from { transform: translateY(-8px); opacity: 0; }
+            to { transform: none; opacity: 1; }
         }
 
-        .remember-me {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .remember-me input {
-            margin-right: 8px;
-            cursor: pointer;
-        }
-
-        .remember-me label {
-            margin-bottom: 0;
-            cursor: pointer;
-            font-weight: normal;
-        }
+        .remember-me { display: flex; align-items: center; margin-bottom: 20px; }
+        .remember-me input { margin-right: 10px; cursor: pointer; accent-color: var(--ink); }
+        .remember-me label { margin-bottom: 0; cursor: pointer; letter-spacing: 0.02em; text-transform: none; font-size: 0.875rem; font-weight: 400; }
 
         .demo-credentials {
-            background-color: #f0f0f0;
-            padding: 15px;
-            border-radius: 5px;
-            margin-top: 20px;
-            font-size: 12px;
-            color: #7f8c8d;
-            border-left: 3px solid var(--primary);
+            margin-top: 28px;
+            padding-top: 20px;
+            border-top: 1px solid var(--line);
+            font-size: 0.75rem;
+            color: var(--muted);
         }
 
-        .demo-credentials strong {
-            color: var(--dark);
-        }
+        .demo-credentials strong { color: var(--ink); font-weight: 500; }
 
-        .back-link {
-            text-align: center;
-            margin-top: 20px;
-        }
+        .back-link { margin-top: 20px; }
 
         .back-link a {
-            color: var(--primary);
+            color: var(--ink);
             text-decoration: none;
-            font-size: 14px;
-            transition: all 0.3s ease;
+            font-size: 0.8125rem;
+            padding-bottom: 4px;
+            border-bottom: 1px solid currentColor;
+            transition: opacity 200ms ease;
         }
 
-        .back-link a:hover {
-            text-decoration: underline;
+        .back-link a:hover { opacity: 0.6; }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="login-header">
-            <i class="fas fa-crown"></i>
-            <h1>Admin Console</h1>
-            <p>MakeUP By Mercy</p>
+            <span class="eyebrow">MakeUP By Mercy</span>
+            <h1>Admin <em>console.</em></h1>
+            <p>Sign in to manage bookings, pricing and availability.</p>
         </div>
 
         <div class="error-message" id="error-message"></div>
