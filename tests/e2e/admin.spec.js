@@ -41,6 +41,51 @@ test.describe('admin sign-in', () => {
   });
 });
 
+test.describe('login page explains why sign-in failed', () => {
+  const failWith = (page, status, body) => page.route('**/api/admin/login', (route) =>
+    route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) }));
+
+  async function trySignIn(page) {
+    await page.goto('/admin-login.html');
+    await page.fill('#username', 'admin');
+    await page.fill('#password', 'some-password-123');
+    await page.click('#login-btn');
+  }
+
+  test('a default-password account is told why, not just "invalid"', async ({ page }) => {
+    await failWith(page, 403, { success: false, message: 'This account still uses the default password. Set ADMIN_INITIAL_PASSWORD on the server and restart to reset it.' });
+    await trySignIn(page);
+    await expect(page.locator('#error-message')).toContainText('cannot sign in yet');
+    await expect(page.locator('#error-message')).toContainText('ADMIN_INITIAL_PASSWORD');
+  });
+
+  test('a database outage is reported as an outage, not a wrong password', async ({ page }) => {
+    await failWith(page, 503, { success: false, message: 'Admin login is temporarily unavailable. Please try again shortly.' });
+    await trySignIn(page);
+    await expect(page.locator('#error-message')).toContainText('temporarily unavailable');
+    await expect(page.locator('#error-message')).not.toContainText('Invalid username or password');
+  });
+
+  test('a rate-limit lockout is explained', async ({ page }) => {
+    await failWith(page, 429, { message: 'Too many login attempts, please try again later.' });
+    await trySignIn(page);
+    await expect(page.locator('#error-message')).toContainText('Too many login attempts');
+  });
+
+  test('a genuinely wrong password still says so, and never hints at a default password', async ({ page }) => {
+    await trySignIn(page);
+    await expect(page.locator('#error-message')).toContainText('Invalid username or password');
+    await expect(page.locator('#error-message')).not.toContainText('admin123');
+  });
+
+  test('server-supplied text is shown as text, never as HTML', async ({ page }) => {
+    await failWith(page, 403, { success: false, message: '<img src=x onerror="window.__loginXss = true">' });
+    await trySignIn(page);
+    await expect(page.locator('#error-message')).toContainText('<img src=x');
+    expect(await page.evaluate(() => window.__loginXss)).toBeUndefined();
+  });
+});
+
 test.describe('managing bookings', () => {
   test('the dashboard counts new bookings', async ({ page, request }) => {
     await seedBooking(request, { email: 'dash1@example.com' });

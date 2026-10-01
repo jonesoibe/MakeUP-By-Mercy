@@ -425,3 +425,96 @@ describe('customer photos in the database', () => {
   });
 });
 
+describe('reset-admin-password script', () => {
+  const { spawnSync } = require('child_process');
+  const path = require('path');
+  const script = path.join(__dirname, '..', 'scripts', 'reset-admin-password.js');
+
+  const runScript = (dbName, env = {}) => spawnSync(process.execPath, [script], {
+    env: { PATH: process.env.PATH, NODE_ENV: 'test', MONGODB_URI: mongod.getUri(dbName), ...env },
+    encoding: 'utf8',
+    timeout: 30000
+  });
+
+  const seedLegacyAdmin = async (dbName) => {
+    const conn = await seedConnection(dbName);
+    await conn.collection('admins').insertOne({
+      username: 'admin', email: 'admin@example.com', role: 'admin', active: true,
+      password: await bcrypt.hash('admin123', 4), createdAt: new Date()
+    });
+    return conn;
+  };
+
+  test('resets an account that is stuck on the old default password, and the new one signs in', async () => {
+    await seedLegacyAdmin('reset_legacy');
+    const result = runScript('reset_legacy', { NEW_ADMIN_PASSWORD: 'a-brand-new-password' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/Password updated for 'admin'/);
+    expect(result.stdout).not.toContain('a-brand-new-password'); // never echoed
+
+    const { app } = await bootApp('reset_legacy');
+    const ok = await login(app, 'admin', 'a-brand-new-password');
+    expect(ok.status).toBe(200);
+    expect(ok.body.role).toBe('admin');
+    expect((await login(app, 'admin', 'admin123')).status).toBe(401);
+  });
+
+  test('creates the account when there is none', async () => {
+    const result = runScript('reset_create', { NEW_ADMIN_PASSWORD: 'another-long-password' });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/Created the 'admin' account/);
+
+    const { app } = await bootApp('reset_create');
+    expect((await login(app, 'admin', 'another-long-password')).status).toBe(200);
+  });
+
+  test('re-activates a deactivated account and keeps its role', async () => {
+    const conn = await seedConnection('reset_inactive');
+    await conn.collection('admins').insertOne({
+      username: 'staff', email: 'staff@example.com', role: 'manager', active: false,
+      password: await bcrypt.hash('whatever-old-1!', 4), createdAt: new Date()
+    });
+    const result = runScript('reset_inactive', { NEW_ADMIN_PASSWORD: 'a-brand-new-password', ADMIN_USERNAME: 'staff' });
+    expect(result.status).toBe(0);
+
+    const { app } = await bootApp('reset_inactive');
+    const res = await login(app, 'staff', 'a-brand-new-password');
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('manager');
+  });
+
+  test.each([
+    ['a password that is too short', { NEW_ADMIN_PASSWORD: 'short' }, /at least 12 characters/],
+    ['the old default password', { NEW_ADMIN_PASSWORD: 'admin123' }, /old default password/]
+  ])('refuses %s and changes nothing', async (_label, env, message) => {
+    const conn = await seedLegacyAdmin(`reset_refuse_${Math.random().toString(36).slice(2, 8)}`);
+    const before = await conn.collection('admins').findOne({ username: 'admin' });
+
+    const dbName = conn.name;
+    const result = runScript(dbName, env);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(message);
+
+    const after = await conn.collection('admins').findOne({ username: 'admin' });
+    expect(after.password).toBe(before.password);
+  });
+
+  test('explains itself when MONGODB_URI is missing', () => {
+    const result = spawnSync(process.execPath, [script], {
+      env: { PATH: process.env.PATH, NODE_ENV: 'test', NEW_ADMIN_PASSWORD: 'a-brand-new-password' },
+      encoding: 'utf8'
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/MONGODB_URI is not set/);
+  });
+
+  test('says so when the database cannot be reached', () => {
+    const result = spawnSync(process.execPath, [script], {
+      env: { PATH: process.env.PATH, NODE_ENV: 'test', NEW_ADMIN_PASSWORD: 'a-brand-new-password', MONGODB_URI: 'mongodb://127.0.0.1:1/x' },
+      encoding: 'utf8',
+      timeout: 30000
+    });
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/could not connect to the database/);
+  });
+});

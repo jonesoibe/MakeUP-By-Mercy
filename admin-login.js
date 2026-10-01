@@ -12,6 +12,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Show an error as plain text: a bold title and an optional detail line
+function showLoginError(title, detail) {
+    const errorMsg = document.getElementById('error-message');
+    const strong = document.createElement('strong');
+    strong.textContent = '\u274C ' + title;
+    errorMsg.replaceChildren(strong);
+    if (detail) {
+        const small = document.createElement('small');
+        small.textContent = detail;
+        errorMsg.append(document.createElement('br'), small);
+    }
+    errorMsg.classList.add('show');
+}
+
 async function handleLogin(event) {
     event.preventDefault();
 
@@ -52,16 +66,28 @@ async function handleLogin(event) {
 
         // Check if response is OK
         if (!response.ok) {
+            // The server says why (e.g. "still uses the default password",
+            // "database not connected"); show that instead of a generic message.
+            let body = {};
+            try { body = await response.json(); } catch (e) { /* not JSON */ }
+            const reason = body.message || '';
+
             if (response.status === 429) {
-                errorMsg.innerHTML = '⏳ <strong>Too many login attempts</strong><br><small>Please wait a few minutes before trying again</small>';
-            } else if (response.status === 401 || response.status === 403) {
-                errorMsg.innerHTML = '❌ <strong>Invalid username or password</strong><br><small>Please check your credentials and try again</small>';
-            } else if (response.status === 500) {
-                errorMsg.innerHTML = '⚠️ <strong>Server error</strong><br><small>The server is having issues. Please try again later</small>';
+                showLoginError('Too many login attempts', 'Please wait about 15 minutes before trying again.');
+            } else if (response.status === 401) {
+                showLoginError('Invalid username or password', 'Please check your details and try again.');
+            } else if (response.status === 403) {
+                showLoginError('This account cannot sign in yet', reason || 'Ask the site administrator to reset the password.');
+            } else if (response.status === 503) {
+                showLoginError('Sign-in is temporarily unavailable', reason || 'The server could not reach its database. Please try again shortly.');
+            } else if (response.status === 400) {
+                const first = body.errors && body.errors[0] ? body.errors[0].message : reason;
+                showLoginError('Please check what you entered', first || 'The username or password is not in a valid format.');
+            } else if (response.status >= 500) {
+                showLoginError('Server error', 'The server is having issues. Please try again later.');
             } else {
-                errorMsg.innerHTML = `❌ <strong>Login failed (Error ${response.status})</strong><br><small>Please try again</small>`;
+                showLoginError('Login failed (error ' + response.status + ')', 'Please try again.');
             }
-            errorMsg.classList.add('show');
 
             // Re-enable button
             loginBtn.disabled = false;
@@ -86,18 +112,7 @@ async function handleLogin(event) {
                 window.location.href = '/admin.html';
             }, 1000);
         } else {
-            // Show specific error messages
-            let errorText = data.message || 'Invalid credentials';
-
-            if (data.message.includes('Invalid credentials')) {
-                errorMsg.innerHTML = '❌ <strong>Invalid username or password</strong><br><small>Username: admin<br>Password: admin123</small>';
-            } else if (data.message.includes('Database required')) {
-                errorMsg.innerHTML = '⚠️ <strong>System initialization in progress</strong><br><small>Please wait a moment and try again</small>';
-            } else {
-                errorMsg.innerHTML = `❌ <strong>${errorText}</strong>`;
-            }
-
-            errorMsg.classList.add('show');
+            showLoginError(data.message || 'Login failed', '');
 
             // Re-enable button
             loginBtn.disabled = false;
@@ -115,7 +130,7 @@ async function handleLogin(event) {
             errorText = 'Network error. Please check your connection';
         }
 
-        errorMsg.innerHTML = `❌ <strong>${errorText}</strong><br><small>Console error: ${error.message}</small>`;
+        showLoginError(errorText, '');
         errorMsg.classList.add('show');
 
         // Re-enable button

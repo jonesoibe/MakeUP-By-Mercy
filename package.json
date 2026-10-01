@@ -13,7 +13,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "admin:reset": "node scripts/reset-admin-password.js"
   },
   "keywords": [
     "makeup",

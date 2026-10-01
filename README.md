@@ -82,6 +82,22 @@ EMAIL_PASSWORD=your-app-password
 OWNER_EMAIL=admin-email@gmail.com
 ```
 
+## 🔑 Can't sign in to the admin?
+
+The old default password (`admin123`) is no longer accepted. The sign-in page now says why it refused you:
+
+- **"This account cannot sign in yet"**: the account still has the old default password. Reset it (below).
+- **"Sign-in is temporarily unavailable"**: the server cannot reach its database. Check `MONGODB_URI` and the Settings > System tab once you are in, or the server logs.
+- **"Too many login attempts"**: wait about 15 minutes.
+
+**Reset the password** (works with your `.env`, or in a Render shell where `MONGODB_URI` is set):
+
+```bash
+npm run admin:reset
+```
+
+It asks for the new password (12+ characters, not shown as you type) and updates the `admin` account in the database. To reset a different account set `ADMIN_USERNAME` first. Alternatively set `ADMIN_INITIAL_PASSWORD` on the server and restart: that resets an account that is still on the old default.
+
 ## 🧪 Testing
 
 ### Automated tests
