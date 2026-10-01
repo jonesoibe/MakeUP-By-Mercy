@@ -1,3 +1,22 @@
+// Escape text before putting it into HTML. Booking fields (name, email, ...)
+// are typed by customers, so they must never be inserted as raw markup.
+function esc(value) {
+    return String(value === undefined || value === null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// One CSV cell: quotes doubled, and a leading = + - @ neutralised so a
+// customer name like =HYPERLINK(...) can't run as a spreadsheet formula.
+function csvCell(value) {
+    let text = String(value === undefined || value === null ? '' : value);
+    if (/^[=+\-@\t\r]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+}
+
 // Global variables
 let allBookings = [];
 let currentBookingId = null;
@@ -175,10 +194,10 @@ async function loadUpcomingAppointments() {
                 const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
                 html += `<tr>
                     <td>${dateStr}</td>
-                    <td>${apt.name}</td>
-                    <td>${apt.service.charAt(0).toUpperCase() + apt.service.slice(1)}</td>
-                    <td>${apt.phone}</td>
-                    <td><span class="status-badge status-${apt.status}">${apt.status}</span></td>
+                    <td>${esc(apt.name)}</td>
+                    <td>${esc(apt.service.charAt(0).toUpperCase() + apt.service.slice(1))}</td>
+                    <td>${esc(apt.phone)}</td>
+                    <td><span class="status-badge status-${esc(apt.status)}">${esc(apt.status)}</span></td>
                 </tr>`;
             });
         } else {
@@ -209,12 +228,12 @@ async function loadRecentBookings() {
                 const dateObj = new Date(booking.date);
                 const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
                 html += `<tr>
-                    <td><strong>${booking.bookingNumber}</strong></td>
-                    <td>${booking.name}</td>
-                    <td>${booking.email}</td>
-                    <td>${booking.service.charAt(0).toUpperCase() + booking.service.slice(1)}</td>
+                    <td><strong>${esc(booking.bookingNumber)}</strong></td>
+                    <td>${esc(booking.name)}</td>
+                    <td>${esc(booking.email)}</td>
+                    <td>${esc(booking.service.charAt(0).toUpperCase() + booking.service.slice(1))}</td>
                     <td>${dateStr}</td>
-                    <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${booking._id}')">View</button></td>
+                    <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${esc(booking._id)}')">View</button></td>
                 </tr>`;
             });
         } else {
@@ -255,14 +274,14 @@ function displayBookingsTable(bookings) {
             const dateObj = new Date(booking.date);
             const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
             html += `<tr>
-                <td><strong>${booking.bookingNumber}</strong></td>
-                <td>${booking.name}</td>
-                <td>${booking.email}</td>
-                <td>${booking.phone}</td>
-                <td>${booking.service.charAt(0).toUpperCase() + booking.service.slice(1)}</td>
+                <td><strong>${esc(booking.bookingNumber)}</strong></td>
+                <td>${esc(booking.name)}</td>
+                <td>${esc(booking.email)}</td>
+                <td>${esc(booking.phone)}</td>
+                <td>${esc(booking.service.charAt(0).toUpperCase() + booking.service.slice(1))}</td>
                 <td>${dateStr}</td>
-                <td><span class="status-badge status-${booking.status}">${booking.status}</span></td>
-                <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${booking._id}')">View</button></td>
+                <td><span class="status-badge status-${esc(booking.status)}">${esc(booking.status)}</span></td>
+                <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${esc(booking._id)}')">View</button></td>
             </tr>`;
         });
     } else {
@@ -298,13 +317,13 @@ function renderManageResults(query) {
         const dateObj = new Date(booking.date);
         const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
         html += `<tr>
-            <td><strong>${booking.bookingNumber}</strong></td>
-            <td>${booking.name}</td>
-            <td>${booking.email}</td>
-            <td>${booking.service.charAt(0).toUpperCase() + booking.service.slice(1)}</td>
+            <td><strong>${esc(booking.bookingNumber)}</strong></td>
+            <td>${esc(booking.name)}</td>
+            <td>${esc(booking.email)}</td>
+            <td>${esc(booking.service.charAt(0).toUpperCase() + booking.service.slice(1))}</td>
             <td>${dateStr}</td>
-            <td><span class="status-badge status-${booking.status}">${booking.status}</span></td>
-            <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${booking._id}')">View</button></td>
+            <td><span class="status-badge status-${esc(booking.status)}">${esc(booking.status)}</span></td>
+            <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${esc(booking._id)}')">View</button></td>
         </tr>`;
     });
     html += '</tbody></table>';
@@ -349,19 +368,19 @@ async function openBookingModal(bookingId) {
 
         let html = `
             <div style="background-color: rgba(255,255,255,0.55); border: 1px solid var(--line); padding: 16px; border-radius: 4px; margin-bottom: 15px;">
-                <h3 style="color: var(--primary); margin-bottom: 10px;">${booking.bookingNumber}</h3>
-                <p><strong>Status:</strong> <span class="status-badge status-${booking.status}">${booking.status}</span></p>
+                <h3 style="color: var(--primary); margin-bottom: 10px;">${esc(booking.bookingNumber)}</h3>
+                <p><strong>Status:</strong> <span class="status-badge status-${esc(booking.status)}">${esc(booking.status)}</span></p>
             </div>
             <div style="margin-bottom: 15px;">
                 <h4 style="margin-bottom: 10px;">Client Information</h4>
-                <p><strong>Name:</strong> ${booking.name}</p>
-                <p><strong>Email:</strong> ${booking.email}</p>
-                <p><strong>Phone:</strong> ${booking.phone}</p>
-                <p><strong>Country:</strong> ${booking.country}</p>
+                <p><strong>Name:</strong> ${esc(booking.name)}</p>
+                <p><strong>Email:</strong> ${esc(booking.email)}</p>
+                <p><strong>Phone:</strong> ${esc(booking.phone)}</p>
+                <p><strong>Country:</strong> ${esc(booking.country)}</p>
             </div>
             <div style="margin-bottom: 15px;">
                 <h4 style="margin-bottom: 10px;">Appointment Details</h4>
-                <p><strong>Service:</strong> ${booking.service.charAt(0).toUpperCase() + booking.service.slice(1)}</p>
+                <p><strong>Service:</strong> ${esc(booking.service.charAt(0).toUpperCase() + booking.service.slice(1))}</p>
                 <p><strong>Date:</strong> ${dateStr}</p>
                 <p><strong>Booked On:</strong> ${new Date(booking.bookedAt).toLocaleString()}</p>
             </div>
@@ -483,7 +502,7 @@ function exportToCSV() {
     let csv = 'Booking ID,Client Name,Email,Phone,Country,Service,Date,Status\n';
     allBookings.forEach(booking => {
         const dateStr = new Date(booking.date).toLocaleDateString();
-        csv += `"${booking.bookingNumber}","${booking.name}","${booking.email}","${booking.phone}","${booking.country}","${booking.service}","${dateStr}","${booking.status}"\n`;
+        csv += [booking.bookingNumber, booking.name, booking.email, booking.phone, booking.country, booking.service, dateStr, booking.status].map(csvCell).join(',') + '\n';
     });
 
     const blob = new Blob([csv], { type: 'text/csv' });

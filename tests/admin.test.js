@@ -99,6 +99,19 @@ describe('bulk pricing', () => {
   });
 });
 
+describe('public pricing without a database', () => {
+  test('shows the price an admin has set', async () => {
+    await request(app).patch('/api/admin/pricing/bridal').set(authHeader()).send({ price: 33000, duration: '3 hours' }).expect(200);
+    const res = await request(app).get('/api/pricing/bridal');
+    expect(res.status).toBe(200);
+    expect(res.body.pricing).toMatchObject({ service: 'bridal', price: 33000, duration: '3 hours' });
+  });
+
+  test('an unknown service -> 404', async () => {
+    expect((await request(app).get('/api/pricing/facial')).status).toBe(404);
+  });
+});
+
 describe('single-service pricing', () => {
   test('rejects an unknown service', async () => {
     const res = await request(app).patch('/api/admin/pricing/facial').set(authHeader()).send({ price: 100 });

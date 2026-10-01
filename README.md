@@ -97,6 +97,23 @@ npm run test:coverage  # with a coverage report (fails if it drops below the flo
 - `tests/admin.test.js` - dashboard maths, pricing, admin actions
 - `tests/db.test.js` - the same app against a real (in-memory) MongoDB: admin accounts, persistence, booking counter, settings
 
+### Browser (end-to-end) tests
+
+```bash
+npx playwright install chromium   # once per machine
+npm run test:e2e
+```
+
+Already have Chrome? Skip the download: `PW_CHANNEL=chrome npm run test:e2e` (PowerShell: `$env:PW_CHANNEL='chrome'; npm run test:e2e`).
+
+They start their own copy of the app on port 3210 (in-memory data, no email) and drive a real browser:
+
+- `tests/e2e/booking.spec.js` - booking form, validation, confirmation, PDF and QR downloads
+- `tests/e2e/admin.spec.js` - sign-in and sign-out, managing bookings, pricing, opening hours, email template, and a check that customer-typed HTML cannot run in the console
+- `tests/e2e/site.spec.js` - navigation, scroll reveals, FAQ, testimonials, images, reduced motion
+- `tests/e2e/mobile.spec.js` - phone viewport: menu, no sideways scroll, booking, touch-target sizes
+- `tests/e2e/a11y.spec.js` - automated WCAG A/AA scan (axe) of the public page, dialog, login and admin console
+
 Tests never read your `.env`, never send real email (SendGrid is mocked) and never touch a real database. The first run of `tests/db.test.js` downloads a MongoDB binary (about 130 MB, cached afterwards in `node_modules/.cache`). Helpers live in `tests/helpers/app.js`.
 
 ### Manual checks

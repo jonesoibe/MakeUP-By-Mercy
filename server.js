@@ -2068,13 +2068,13 @@ app.get('/api/pricing/:service', async (req, res) => {
       }
       res.json({ success: true, pricing });
     } else {
-      // Fallback
-      const fallback = {
-        bridal: { service: 'bridal', minPrice: 15000, maxPrice: 25000 },
-        party: { service: 'party', minPrice: 8000, maxPrice: 15000 },
-        casual: { service: 'casual', minPrice: 5000, maxPrice: 10000 }
-      };
-      res.json({ success: true, pricing: fallback[service] });
+      // No database: serve the in-memory pricing, the same data the admin
+      // console edits, so a price changed there shows on the public site.
+      const entry = pricingMemory.find(p => p.service === service);
+      if (!entry) {
+        return res.status(404).json({ success: false, message: 'Pricing not found' });
+      }
+      res.json({ success: true, pricing: entry });
     }
   } catch (error) {
     logger.error('Pricing fetch error:', error.message);

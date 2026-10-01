@@ -6,6 +6,7 @@
     <title>MakeUP By Mercy - Book Your Perfect Makeup Look</title>
     <meta name="description" content="Bridal, party and everyday makeup artistry by Mercy. Book your appointment online.">
     <meta name="theme-color" content="#4a3a33">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232e2420'/%3E%3Ctext x='32' y='45' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23f3efe8'%3Em%3C/text%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
@@ -18,7 +19,7 @@
             --mocha-deep: #2e2420;
             --ink: #2b2328;
             --muted: #6b5f5b;
-            --clay: #8c6a5a;
+            --clay: #7d5a49;
             --blush: #d8b9a8;
             --line: rgba(43, 35, 40, 0.16);
             --line-light: rgba(243, 239, 232, 0.28);
@@ -1318,9 +1319,13 @@
 
     <script>
         // Detect API URL based on environment
-        const API_URL = window.location.hostname === 'localhost'
+        // The page is always served by the same server that hosts the API, so
+        // call it on the same origin - this works on localhost (any port),
+        // a deployed domain, or anywhere else. Only a page opened straight
+        // from disk (file://) has no server to ask, so it uses the local default.
+        const API_URL = window.location.protocol === 'file:'
             ? 'http://localhost:3000/api'
-            : `${window.location.protocol}//${window.location.host}/api`;
+            : `${window.location.origin}/api`;
 
         // ========== VALIDATION ==========
         function validateName() {
