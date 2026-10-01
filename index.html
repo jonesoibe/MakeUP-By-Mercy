@@ -1368,8 +1368,10 @@
             const formGroup = phoneInput.closest('.form-row');
             const value = phoneInput.value.trim();
 
-            if (value.length < 7) {
-                phoneError.textContent = 'Please enter a valid phone number';
+            // Mirror the server's rule (10-20 characters: digits, +, -, spaces,
+            // parentheses) so the form never accepts a number the API rejects.
+            if (!/^[0-9+\-\s()]{10,20}$/.test(value)) {
+                phoneError.textContent = 'Please enter a valid phone number (10-20 digits, e.g. 0813 216 8881)';
                 phoneError.classList.add('show');
                 if (formGroup) formGroup.classList.add('error');
                 if (formGroup) formGroup.classList.remove('success');
@@ -1513,7 +1515,9 @@
                         button.disabled = false;
                     }, 3000);
                 } else {
-                    alert(`Error: ${data.message}`);
+                    // Prefer the first field-level message from server validation
+                    const detail = data.errors && data.errors[0] ? data.errors[0].message : data.message;
+                    alert(`Error: ${detail}`);
                     button.disabled = false;
                     button.innerHTML = originalHTML;
                 }

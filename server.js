@@ -149,20 +149,32 @@ async function sendEmail({ to, subject, html }) {
 }
 
 // Middleware
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'https://makeup-by-mercy.onrender.com',
+  process.env.CLIENT_URL || ''
+].filter(Boolean).map(o => o.replace(/\/+$/, ''));
+
+// A request is allowed when it has no Origin (same-origin GETs, curl), comes
+// from a whitelisted origin, or comes from the very host serving it. The last
+// rule matters: a same-origin POST still carries an Origin header, so a fixed
+// whitelist rejected the site's own booking form on any domain not listed
+// (a custom domain, Railway, a preview URL) unless CLIENT_URL matched exactly.
+function isAllowedOrigin(origin, req) {
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  try {
+    return new URL(origin).host === req.get('host');
+  } catch (error) {
+    return false;
+  }
+}
+
 const corsOptions = {
-  origin: function(origin, callback) {
-    const whitelist = [
-      'http://localhost:3000',
-      'http://localhost:5000',
-      'https://makeup-by-mercy.onrender.com',
-      process.env.CLIENT_URL || ''
-    ];
-    if (!origin || whitelist.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS not allowed'));
-    }
-  },
+  // Disallowed origins are rejected by the middleware below with a 403, so by
+  // the time cors() runs the origin has already been vetted.
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -279,6 +291,18 @@ const updatePricingSchema = Joi.object({
   duration: Joi.string().max(100).allow('').optional()
 });
 
+// Bulk pricing: any of the three services, each with the single-update fields
+const bulkServicePricing = Joi.object({
+  price: Joi.number().min(0).required(),
+  description: Joi.string().max(500).allow('').optional(),
+  duration: Joi.string().max(100).allow('').optional()
+});
+const bulkPricingSchema = Joi.object({
+  bridal: bulkServicePricing,
+  party: bulkServicePricing,
+  casual: bulkServicePricing
+}).min(1);
+
 // Email Template validation schema
 const updateEmailTemplateSchema = Joi.object({
   subject: Joi.string().min(5).max(200).required(),
@@ -322,6 +346,12 @@ function validateRequest(schema) {
 }
 
 app.use('/api', generalLimiter);
+app.use((req, res, next) => {
+  if (!isAllowedOrigin(req.headers.origin, req)) {
+    return res.status(403).json({ success: false, message: 'Origin not allowed' });
+  }
+  next();
+});
 app.use(cors(corsOptions));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -373,6 +403,14 @@ app.get('/swagger.json', (req, res) => {
   res.send(swaggerDocument);
 });
 
+// Plain-text email header values (subjects) must not carry line breaks.
+function stripLineBreaks(value) {
+  return String(value === undefined || value === null ? '' : value).replace(/[\r\n]+/g, ' ').trim();
+}
+
+// Where the admin console lives, for links in owner emails.
+const ADMIN_URL = `${(process.env.CLIENT_URL || `http://localhost:${PORT}`).replace(/\/+$/, '')}/admin`;
+
 // Function to send confirmation email to CLIENT
 async function sendConfirmationEmail(booking) {
   try {
@@ -395,7 +433,7 @@ async function sendConfirmationEmail(booking) {
           </div>
 
           <div style="background: white; padding: 30px; border: 1px solid #e0e0e0;">
-            <p style="color: #333; font-size: 16px;">Hi ${booking.name},</p>
+            <p style="color: #333; font-size: 16px;">Hi ${escapeHtml(booking.name)},</p>
 
             <p style="color: #666; line-height: 1.6;">
               Thank you for booking with <strong>MakeUP By Mercy</strong>! We're excited to make you look stunning.
@@ -404,10 +442,10 @@ async function sendConfirmationEmail(booking) {
             <div style="background: #f2ebf2; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <h3 style="color: #cc3380; margin-top: 0;">Booking Details</h3>
               <p style="margin: 10px 0;"><strong>Booking ID:</strong> ${booking.bookingNumber}</p>
-              <p style="margin: 10px 0;"><strong>Name:</strong> ${booking.name}</p>
-              <p style="margin: 10px 0;"><strong>Phone:</strong> ${booking.phone} (${booking.country})</p>
-              <p style="margin: 10px 0;"><strong>Email:</strong> ${booking.email}</p>
-              <p style="margin: 10px 0;"><strong>Service:</strong> ${booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1')}</p>
+              <p style="margin: 10px 0;"><strong>Name:</strong> ${escapeHtml(booking.name)}</p>
+              <p style="margin: 10px 0;"><strong>Phone:</strong> ${escapeHtml(booking.phone)} (${escapeHtml(booking.country)})</p>
+              <p style="margin: 10px 0;"><strong>Email:</strong> ${escapeHtml(booking.email)}</p>
+              <p style="margin: 10px 0;"><strong>Service:</strong> ${escapeHtml(booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1'))}</p>
               <p style="margin: 10px 0;"><strong>Date:</strong> ${new Date(booking.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
 
@@ -467,7 +505,7 @@ async function sendMercyNotification(booking) {
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: ownerEmail,
-      subject: `New Booking: ${booking.name} - ${booking.service.toUpperCase()}`,
+      subject: `New Booking: ${stripLineBreaks(booking.name)} - ${booking.service.toUpperCase()}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #cc3380 0%, #ff69b4 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
@@ -481,10 +519,10 @@ async function sendMercyNotification(booking) {
             <div style="background: #f2ebf2; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #cc3380;">
               <h3 style="color: #cc3380; margin-top: 0;">Booking Details</h3>
               <p style="margin: 10px 0;"><strong>Booking ID:</strong> ${booking.bookingNumber}</p>
-              <p style="margin: 10px 0;"><strong>Client Name:</strong> ${booking.name}</p>
-              <p style="margin: 10px 0;"><strong>Client Phone:</strong> ${booking.phone} (${booking.country})</p>
-              <p style="margin: 10px 0;"><strong>Client Email:</strong> ${booking.email}</p>
-              <p style="margin: 10px 0;"><strong>Service Type:</strong> ${booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1')}</p>
+              <p style="margin: 10px 0;"><strong>Client Name:</strong> ${escapeHtml(booking.name)}</p>
+              <p style="margin: 10px 0;"><strong>Client Phone:</strong> ${escapeHtml(booking.phone)} (${escapeHtml(booking.country)})</p>
+              <p style="margin: 10px 0;"><strong>Client Email:</strong> ${escapeHtml(booking.email)}</p>
+              <p style="margin: 10px 0;"><strong>Service Type:</strong> ${escapeHtml(booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1'))}</p>
               <p style="margin: 10px 0;"><strong>Booking Date:</strong> ${new Date(booking.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
               <p style="margin: 10px 0;"><strong>Booked At:</strong> ${new Date(booking.bookedAt).toLocaleString()}</p>
             </div>
@@ -497,7 +535,7 @@ async function sendMercyNotification(booking) {
             </p>
 
             <p style="color: #999; font-size: 14px; margin-top: 30px;">
-              View all bookings at: <a href="http://localhost:3000/api/bookings" style="color: #cc3380; text-decoration: none;">Your Bookings Dashboard</a>
+              View all bookings at: <a href="${escapeHtml(ADMIN_URL)}" style="color: #cc3380; text-decoration: none;">Your Bookings Dashboard</a>
             </p>
           </div>
 
@@ -988,21 +1026,63 @@ async function initializeBookingCounter() {
 }
 
 // Verify JWT Token
-function verifyAdminToken(req, res, next) {
+async function verifyAdminToken(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
 
   const token = authHeader.substring(7);
+  let decoded;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.admin = decoded;
-    next();
+    decoded = jwt.verify(token, JWT_SECRET);
   } catch (error) {
     log('WARN', 'Invalid token attempt:', error.message);
-    res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
   }
+
+  // A valid signature only proves the token was issued; it says nothing about
+  // whether the account still exists. Re-check the account (briefly cached) so
+  // a deleted or deactivated admin loses access immediately, and a role change
+  // takes effect without waiting up to 24h for the token to expire.
+  if (MONGO_URI && mongoose.isValidObjectId(decoded.id)) {
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ success: false, message: 'Service temporarily unavailable' });
+    }
+    try {
+      const account = await getAdminAccountState(decoded.id);
+      if (!account || !account.active) {
+        return res.status(401).json({ success: false, message: 'Account is no longer active' });
+      }
+      decoded.role = account.role;
+    } catch (error) {
+      log('ERROR', 'Admin account lookup failed:', error.message);
+      return res.status(503).json({ success: false, message: 'Service temporarily unavailable' });
+    }
+  }
+
+  req.admin = decoded;
+  next();
+}
+
+// Short-lived cache of admin account state so the check above isn't a
+// database round trip on every request.
+const ADMIN_STATE_TTL_MS = 30 * 1000;
+const adminStateCache = new Map();
+
+async function getAdminAccountState(id) {
+  const key = String(id);
+  const cached = adminStateCache.get(key);
+  if (cached && Date.now() - cached.at < ADMIN_STATE_TTL_MS) return cached.state;
+
+  const doc = await Admin.findById(key).select('role active');
+  const state = doc ? { role: doc.role, active: doc.active !== false } : null;
+  adminStateCache.set(key, { state, at: Date.now() });
+  return state;
+}
+
+function invalidateAdminState(id) {
+  adminStateCache.delete(String(id));
 }
 
 // Role-Based Access Control
@@ -1081,6 +1161,23 @@ app.post('/api/admin/login', authLimiter, validateRequest(adminLoginSchema), asy
   }
 });
 
+// Current price per service, from the admin-managed Pricing data (falls back
+// to the built-in defaults for a service with no stored price).
+async function getPriceMap() {
+  const prices = { bridal: 25000, party: 15000, casual: 10000 };
+  const rows = (MONGO_URI && mongoose.connection.readyState === 1)
+    ? await Pricing.find().lean()
+    : pricingMemory;
+  rows.forEach(row => {
+    if (prices[row.service] !== undefined && typeof row.price === 'number') {
+      prices[row.service] = row.price;
+    }
+  });
+  return prices;
+}
+
+// Booking dates are date-only values stored as UTC midnight, so month and
+// weekday must be read in UTC or they shift a day in timezones behind UTC.
 // Admin Dashboard
 app.get('/api/admin/dashboard', verifyAdminToken, async (req, res) => {
   try {
@@ -1093,18 +1190,27 @@ app.get('/api/admin/dashboard', verifyAdminToken, async (req, res) => {
     const confirmedBookings = allBookings.filter(b => b.status === 'confirmed').length;
     const pendingBookings = allBookings.filter(b => b.status === 'pending').length;
 
-    // Calculate monthly revenue
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    const monthlyBookings = allBookings.filter(b => {
-      const bookDate = new Date(b.date);
-      return bookDate.getMonth() === currentMonth && bookDate.getFullYear() === currentYear;
-    });
-    const monthlyRevenue = monthlyBookings.reduce((sum, b) => sum + (getPriceForService(b.service)), 0);
+    // Cancelled bookings earn nothing and don't count as customers
+    const activeBookings = allBookings.filter(b => b.status !== 'cancelled');
 
-    // Calculate repeat customers
-    const customerEmails = allBookings.map(b => b.email);
-    const repeatCustomers = customerEmails.filter((email, index) => customerEmails.indexOf(email) !== index).length;
+    // Monthly revenue at current admin-set prices
+    const prices = await getPriceMap();
+    const now = new Date();
+    const currentMonth = now.getUTCMonth();
+    const currentYear = now.getUTCFullYear();
+    const monthlyBookings = activeBookings.filter(b => {
+      const bookDate = new Date(b.date);
+      return bookDate.getUTCMonth() === currentMonth && bookDate.getUTCFullYear() === currentYear;
+    });
+    const monthlyRevenue = monthlyBookings.reduce((sum, b) => sum + (prices[b.service] || 0), 0);
+
+    // Repeat customers: distinct people with more than one booking
+    const bookingsPerCustomer = {};
+    activeBookings.forEach(b => {
+      const email = String(b.email || '').trim().toLowerCase();
+      if (email) bookingsPerCustomer[email] = (bookingsPerCustomer[email] || 0) + 1;
+    });
+    const repeatCustomers = Object.values(bookingsPerCustomer).filter(count => count > 1).length;
 
     res.json({
       success: true,
@@ -1241,10 +1347,10 @@ app.patch('/api/admin/bookings/:id/cancel', verifyAdminToken, async (req, res) =
 });
 
 // Send message to client
-app.post('/api/admin/bookings/:id/message', verifyAdminToken, async (req, res) => {
+app.post('/api/admin/bookings/:id/message', verifyAdminToken, requireRole('admin', 'manager'), validateRequest(contactCustomerSchema), async (req, res) => {
   try {
     const bookingId = req.params.id;
-    const { message } = req.body;
+    const { message } = req.validatedBody;
 
     let booking = bookings.find(b => b._id === bookingId);
     if (!booking && MONGO_URI && mongoose.connection.readyState === 1) {
@@ -1263,8 +1369,8 @@ app.post('/api/admin/bookings/:id/message', verifyAdminToken, async (req, res) =
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Message from MakeUP By Mercy</h2>
-          <p>Hi ${booking.name},</p>
-          <p>${message}</p>
+          <p>Hi ${escapeHtml(booking.name)},</p>
+          <p>${escapeHtml(message).replace(/\r?\n/g, '<br>')}</p>
           <p>Best regards,<br>MakeUP By Mercy Team</p>
         </div>
       `
@@ -1301,7 +1407,7 @@ app.get('/api/admin/analytics', verifyAdminToken, async (req, res) => {
     // Peak day
     const dayCount = {};
     allBookings.forEach(b => {
-      const day = new Date(b.date).toLocaleDateString('en-US', { weekday: 'long' });
+      const day = new Date(b.date).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
       dayCount[day] = (dayCount[day] || 0) + 1;
     });
     const peakDay = Object.keys(dayCount).reduce((a, b) => dayCount[a] > dayCount[b] ? a : b, 'Monday');
@@ -1317,16 +1423,6 @@ app.get('/api/admin/analytics', verifyAdminToken, async (req, res) => {
     res.status(500).json({ success: false, message: 'Error fetching analytics' });
   }
 });
-
-// Helper function to get price for service
-function getPriceForService(service) {
-  const prices = {
-    bridal: 25000,
-    party: 15000,
-    casual: 10000
-  };
-  return prices[service] || 0;
-}
 
 // Serve admin pages
 app.get('/admin', (req, res) => {
@@ -1422,18 +1518,26 @@ function validateBookingId(id) {
 // Receipt access: an admin (Bearer token) can fetch any receipt; a customer
 // can fetch only their own using the per-booking receiptToken they were given
 // when they booked (?token=...). Returns 'admin', 'customer' or null.
-function getAdminFromRequest(req) {
+async function getAdminFromRequest(req) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   try {
-    return jwt.verify(authHeader.substring(7), JWT_SECRET);
+    const decoded = jwt.verify(authHeader.substring(7), JWT_SECRET);
+    // Same account check as verifyAdminToken: deleted/deactivated admins don't count.
+    if (MONGO_URI && mongoose.isValidObjectId(decoded.id)) {
+      if (mongoose.connection.readyState !== 1) return null;
+      const account = await getAdminAccountState(decoded.id);
+      if (!account || !account.active) return null;
+      decoded.role = account.role;
+    }
+    return decoded;
   } catch (error) {
     return null;
   }
 }
 
-function receiptAccess(req, booking) {
-  if (getAdminFromRequest(req)) return 'admin';
+async function receiptAccess(req, booking) {
+  if (await getAdminFromRequest(req)) return 'admin';
 
   const supplied = typeof req.query.token === 'string' ? req.query.token : '';
   const expected = booking && booking.receiptToken ? String(booking.receiptToken) : '';
@@ -1464,9 +1568,10 @@ app.get('/api/bookings/:id/receipt/pdf', async (req, res) => {
 
     // Same response whether the booking is missing or the token is wrong, so
     // booking numbers can't be probed for existence.
-    const access = booking ? receiptAccess(req, booking) : null;
+    const access = booking ? await receiptAccess(req, booking) : null;
     if (!access) {
-      return res.status(getAdminFromRequest(req) ? 404 : 403).json({ success: false, message: getAdminFromRequest(req) ? 'Booking not found' : 'Not authorized to view this receipt' });
+      const isAdmin = !!(await getAdminFromRequest(req));
+      return res.status(isAdmin ? 404 : 403).json({ success: false, message: isAdmin ? 'Booking not found' : 'Not authorized to view this receipt' });
     }
 
     const pdfBase64 = await generateReceiptPDF(booking);
@@ -1503,9 +1608,10 @@ app.get('/api/bookings/:id/receipt/image', async (req, res) => {
       booking = bookings.find(b => b.bookingNumber === id);
     }
 
-    const access = booking ? receiptAccess(req, booking) : null;
+    const access = booking ? await receiptAccess(req, booking) : null;
     if (!access) {
-      return res.status(getAdminFromRequest(req) ? 404 : 403).json({ success: false, message: getAdminFromRequest(req) ? 'Booking not found' : 'Not authorized to view this receipt' });
+      const isAdmin = !!(await getAdminFromRequest(req));
+      return res.status(isAdmin ? 404 : 403).json({ success: false, message: isAdmin ? 'Booking not found' : 'Not authorized to view this receipt' });
     }
 
     const qrCode = await generateQRCode(`${booking.bookingNumber}`);
@@ -1525,6 +1631,7 @@ app.get('/api/bookings/:id/receipt/image', async (req, res) => {
 
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
+  text = String(text === undefined || text === null ? '' : text);
   const map = {
     '&': '&amp;',
     '<': '&lt;',
@@ -1600,7 +1707,7 @@ app.post('/api/admin/bookings/:id/contact', verifyAdminToken, validateRequest(co
     // Send email to customer with escaped content
     await sendEmail({
       to: booking.email,
-      subject: escapeHtml(subject || `Update regarding your booking ${booking.bookingNumber}`),
+      subject: stripLineBreaks(subject || `Update regarding your booking ${booking.bookingNumber}`),
       html: `
         <h2>Hello ${escapeHtml(booking.name)},</h2>
         <p>${escapeHtml(message)}</p>
@@ -1732,6 +1839,7 @@ app.patch('/api/admin/users/:userId', verifyAdminToken, validateRequest(updateAd
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    invalidateAdminState(userId);
     auditLog('USER_UPDATED', req.admin.username, {
       targetUserId: userId,
       updatedFields: Object.keys(updateData)
@@ -1756,6 +1864,7 @@ app.delete('/api/admin/users/:userId', verifyAdminToken, requireRole('admin'), a
     }
 
     await Admin.findByIdAndDelete(userId);
+    invalidateAdminState(userId);
     res.json({ success: true, message: 'User deleted' });
     log('INFO', `Admin user deleted: ${userId}`);
   } catch (error) {
@@ -1833,38 +1942,35 @@ app.patch('/api/admin/pricing/:service', verifyAdminToken, requireRole('admin'),
 });
 
 // Set pricing for multiple services (Admin only)
-app.post('/api/admin/pricing', verifyAdminToken, requireRole('admin'), async (req, res) => {
+// Same fields and rules as the single-service PATCH, for several services at
+// once. Only whitelisted fields are written (no arbitrary client fields), and
+// a service with no stored document is created instead of crashing.
+app.post('/api/admin/pricing', verifyAdminToken, requireRole('admin'), validateRequest(bulkPricingSchema), async (req, res) => {
   try {
-    const { bridal, party, casual } = req.body;
-
-    if (!MONGO_URI || mongoose.connection.readyState !== 1) {
-      return res.status(400).json({ success: false, message: 'Database required' });
-    }
-
-    const updates = [];
-
-    if (bridal && bridal.minPrice !== undefined && bridal.maxPrice !== undefined) {
-      updates.push({ service: 'bridal', ...bridal, updatedBy: req.admin.username, updatedAt: new Date() });
-    }
-    if (party && party.minPrice !== undefined && party.maxPrice !== undefined) {
-      updates.push({ service: 'party', ...party, updatedBy: req.admin.username, updatedAt: new Date() });
-    }
-    if (casual && casual.minPrice !== undefined && casual.maxPrice !== undefined) {
-      updates.push({ service: 'casual', ...casual, updatedBy: req.admin.username, updatedAt: new Date() });
-    }
+    const entries = Object.entries(req.validatedBody);
+    const useDb = MONGO_URI && mongoose.connection.readyState === 1;
 
     const results = [];
-    for (const update of updates) {
-      const result = await Pricing.findOneAndUpdate(
-        { service: update.service },
-        update,
-        { new: true }
-      );
-      results.push(result);
+    for (const [service, { price, description, duration }] of entries) {
+      const fields = {
+        price,
+        description: description || '',
+        duration: duration || '',
+        updatedBy: req.admin.username,
+        updatedAt: new Date()
+      };
+
+      if (useDb) {
+        results.push(await Pricing.findOneAndUpdate({ service }, fields, { new: true, upsert: true }));
+      } else {
+        const entry = pricingMemory.find(p => p.service === service);
+        Object.assign(entry, fields);
+        results.push(entry);
+      }
     }
 
     auditLog('PRICING_BULK_UPDATE', req.admin.username, {
-      servicesUpdated: results.map(p => p.service)
+      servicesUpdated: entries.map(([service]) => service)
     });
 
     res.json({ success: true, pricing: results });
