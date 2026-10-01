@@ -20,6 +20,8 @@ services:
         sync: false
       - key: OWNER_EMAIL
         sync: false
+      - key: ADMIN_INITIAL_PASSWORD
+        sync: false
 
 databases:
   - name: makeup-mercy-db

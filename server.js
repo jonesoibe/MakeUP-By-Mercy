@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const crypto = require('crypto');
 const sgMail = require('@sendgrid/mail');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
@@ -18,6 +19,17 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Behind a hosting proxy (Render etc.) every request arrives from the proxy's
+// address, so without this req.ip is the same for all visitors and the rate
+// limiters below would count the whole site as a single client. Trust one
+// proxy hop in production; set TRUST_PROXY to a different hop count if needed.
+const trustProxyHops = parseInt(process.env.TRUST_PROXY, 10);
+if (Number.isInteger(trustProxyHops)) {
+  app.set('trust proxy', trustProxyHops);
+} else if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 // ========== WINSTON LOGGING SETUP ==========
 const fs = require('fs');
@@ -105,7 +117,10 @@ const bookingSchema = new mongoose.Schema({
   status: { type: String, default: 'confirmed' },
   emailSent: { type: Boolean, default: false },
   ownerEmailSent: { type: Boolean, default: false },
-  qrCode: { type: String, default: null }
+  qrCode: { type: String, default: null },
+  // Random per-booking secret returned only to the customer who made the
+  // booking. It lets them download their own receipt without an admin login.
+  receiptToken: { type: String, default: null }
 });
 
 const Booking = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
@@ -175,13 +190,16 @@ app.use(helmet({
 }));
 
 // Rate limiting middleware
+// Applied to /api only (see app.use below), so page, image and script loads
+// don't eat into the budget. The admin console makes several API calls per
+// view, hence the headroom over a public visitor's needs.
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/api/health'
+  skip: (req) => req.path === '/health'
 });
 
 const authLimiter = rateLimit({
@@ -247,6 +265,13 @@ const createAdminSchema = Joi.object({
   role: Joi.string().valid('admin', 'manager', 'viewer').default('manager')
 });
 
+// Update-user validation schema: every field optional, but not an empty body
+const updateAdminSchema = Joi.object({
+  email: Joi.string().email(),
+  password: Joi.string().min(8).max(100).pattern(/[A-Z]/).pattern(/[0-9]/).pattern(/[!@#$%^&*]/),
+  role: Joi.string().valid('admin', 'manager', 'viewer')
+}).min(1);
+
 // Pricing validation schema
 const updatePricingSchema = Joi.object({
   price: Joi.number().min(0).required(),
@@ -296,7 +321,7 @@ function validateRequest(schema) {
   };
 }
 
-app.use(generalLimiter);
+app.use('/api', generalLimiter);
 app.use(cors(corsOptions));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -604,7 +629,8 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
       service,
       date,
       bookedAt: new Date().toISOString(),
-      status: 'confirmed'
+      status: 'confirmed',
+      receiptToken: crypto.randomBytes(16).toString('hex')
     };
 
     // Pre-generate and cache QR code for faster PDF generation
@@ -663,7 +689,8 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
         country: booking.country,
         service: booking.service,
         date: booking.date,
-        bookedAt: booking.bookedAt
+        bookedAt: booking.bookedAt,
+        receiptToken: booking.receiptToken
       }
     });
 
@@ -877,21 +904,52 @@ async function initializeDefaultPricing() {
   }
 }
 
-// Initialize default admin (only if not exists)
+// The password the original code seeded for the default admin. It is public
+// knowledge, so it must never be accepted for login.
+const KNOWN_DEFAULT_PASSWORD = 'admin123';
+const MIN_INITIAL_PASSWORD_LENGTH = 12;
+
+// Create (or repair) the first admin account.
+// - No account yet: one is created only if ADMIN_INITIAL_PASSWORD is set.
+//   Nothing is seeded with a built-in password.
+// - Existing 'admin' account still using the old default password: it is
+//   reset to ADMIN_INITIAL_PASSWORD if provided; otherwise login with the
+//   default is refused (see the admin login route) and an error is logged.
 async function initializeDefaultAdmin() {
   try {
-    if (MONGO_URI && mongoose.connection.readyState === 1) {
-      const existingAdmin = await Admin.findOne({ username: 'admin' });
-      if (!existingAdmin) {
-        const hashedPassword = await bcryptjs.hash('admin123', 10);
-        await Admin.create({
-          username: 'admin',
-          email: process.env.OWNER_EMAIL || 'admin@makeup-mercy.com',
-          password: hashedPassword,
-          role: 'admin',
-          active: true
-        });
-        log('INFO', 'Default admin user created');
+    if (!(MONGO_URI && mongoose.connection.readyState === 1)) return;
+
+    const initialPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    const initialPasswordUsable = !!initialPassword && initialPassword.length >= MIN_INITIAL_PASSWORD_LENGTH && initialPassword !== KNOWN_DEFAULT_PASSWORD;
+    if (initialPassword && !initialPasswordUsable) {
+      log('ERROR', `ADMIN_INITIAL_PASSWORD ignored: it must be at least ${MIN_INITIAL_PASSWORD_LENGTH} characters.`);
+    }
+
+    const existingAdmin = await Admin.findOne({ username: 'admin' });
+
+    if (!existingAdmin) {
+      if (!initialPasswordUsable) {
+        log('WARN', 'No admin account exists. Set ADMIN_INITIAL_PASSWORD (12+ characters) and restart to create one.');
+        return;
+      }
+      await Admin.create({
+        username: 'admin',
+        email: process.env.OWNER_EMAIL || 'admin@makeup-mercy.com',
+        password: await bcryptjs.hash(initialPassword, 10),
+        role: 'admin',
+        active: true
+      });
+      log('INFO', 'Admin user created from ADMIN_INITIAL_PASSWORD');
+      return;
+    }
+
+    if (await bcryptjs.compare(KNOWN_DEFAULT_PASSWORD, existingAdmin.password)) {
+      if (initialPasswordUsable) {
+        existingAdmin.password = await bcryptjs.hash(initialPassword, 10);
+        await existingAdmin.save();
+        log('INFO', 'Admin account was using the default password; reset to ADMIN_INITIAL_PASSWORD');
+      } else {
+        log('ERROR', 'Admin account still uses the default password and cannot log in. Set ADMIN_INITIAL_PASSWORD (12+ characters) and restart to reset it.');
       }
     }
   } catch (error) {
@@ -996,6 +1054,10 @@ app.post('/api/admin/login', authLimiter, validateRequest(adminLoginSchema), asy
       if (!isPasswordValid) {
         auditLog('LOGIN_FAILED', username, { reason: 'invalid_password', ip: req.ip });
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      }
+      if (password === KNOWN_DEFAULT_PASSWORD) {
+        auditLog('LOGIN_FAILED', username, { reason: 'default_password_refused', ip: req.ip });
+        return res.status(403).json({ success: false, message: 'This account still uses the default password. Set ADMIN_INITIAL_PASSWORD on the server and restart to reset it.' });
       }
     }
 
@@ -1357,8 +1419,32 @@ function validateBookingId(id) {
   return /^MKP-\d{5}$/.test(id);
 }
 
+// Receipt access: an admin (Bearer token) can fetch any receipt; a customer
+// can fetch only their own using the per-booking receiptToken they were given
+// when they booked (?token=...). Returns 'admin', 'customer' or null.
+function getAdminFromRequest(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  try {
+    return jwt.verify(authHeader.substring(7), JWT_SECRET);
+  } catch (error) {
+    return null;
+  }
+}
+
+function receiptAccess(req, booking) {
+  if (getAdminFromRequest(req)) return 'admin';
+
+  const supplied = typeof req.query.token === 'string' ? req.query.token : '';
+  const expected = booking && booking.receiptToken ? String(booking.receiptToken) : '';
+  if (!supplied || !expected || supplied.length !== expected.length) return null;
+
+  const match = crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
+  return match ? 'customer' : null;
+}
+
 // Download Receipt as PDF
-app.get('/api/bookings/:id/receipt/pdf', verifyAdminToken, async (req, res) => {
+app.get('/api/bookings/:id/receipt/pdf', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1376,14 +1462,18 @@ app.get('/api/bookings/:id/receipt/pdf', verifyAdminToken, async (req, res) => {
       booking = bookings.find(b => b.bookingNumber === id);
     }
 
-    if (!booking) {
-      return res.status(404).json({ success: false, message: 'Booking not found' });
+    // Same response whether the booking is missing or the token is wrong, so
+    // booking numbers can't be probed for existence.
+    const access = booking ? receiptAccess(req, booking) : null;
+    if (!access) {
+      return res.status(getAdminFromRequest(req) ? 404 : 403).json({ success: false, message: getAdminFromRequest(req) ? 'Booking not found' : 'Not authorized to view this receipt' });
     }
 
     const pdfBase64 = await generateReceiptPDF(booking);
     const pdfBuffer = Buffer.from(pdfBase64, 'base64');
 
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Disposition', `attachment; filename=booking-${booking.bookingNumber}.pdf`);
     res.send(pdfBuffer);
 
@@ -1395,7 +1485,7 @@ app.get('/api/bookings/:id/receipt/pdf', verifyAdminToken, async (req, res) => {
 });
 
 // Download Receipt as Image (PNG with booking details)
-app.get('/api/bookings/:id/receipt/image', verifyAdminToken, async (req, res) => {
+app.get('/api/bookings/:id/receipt/image', async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -1413,8 +1503,9 @@ app.get('/api/bookings/:id/receipt/image', verifyAdminToken, async (req, res) =>
       booking = bookings.find(b => b.bookingNumber === id);
     }
 
-    if (!booking) {
-      return res.status(404).json({ success: false, message: 'Booking not found' });
+    const access = booking ? receiptAccess(req, booking) : null;
+    if (!access) {
+      return res.status(getAdminFromRequest(req) ? 404 : 403).json({ success: false, message: getAdminFromRequest(req) ? 'Booking not found' : 'Not authorized to view this receipt' });
     }
 
     const qrCode = await generateQRCode(`${booking.bookingNumber}`);
@@ -1422,7 +1513,9 @@ app.get('/api/bookings/:id/receipt/image', verifyAdminToken, async (req, res) =>
       return res.status(500).json({ success: false, message: 'Error generating QR code' });
     }
 
-    res.json({ success: true, qrCode, booking });
+    res.setHeader('Cache-Control', 'no-store');
+    // Customers get only the QR code; the full booking record is admin-only.
+    res.json(access === 'admin' ? { success: true, qrCode, booking } : { success: true, qrCode });
     log('INFO', `Receipt image generated: ${booking.bookingNumber}`);
   } catch (error) {
     log('ERROR', 'Receipt image error:', error.message);
@@ -1604,27 +1697,50 @@ app.get('/api/admin/users', verifyAdminToken, requireRole('admin'), async (req, 
 });
 
 // Update Admin User (Self or Admin)
-app.patch('/api/admin/users/:userId', verifyAdminToken, async (req, res) => {
+// Anyone may update their own email/password; only an admin may update other
+// users or change roles. Without this check, any logged-in account (even a
+// 'viewer') could reset the main admin's password and take the account over.
+app.patch('/api/admin/users/:userId', verifyAdminToken, validateRequest(updateAdminSchema), async (req, res) => {
   try {
     const { userId } = req.params;
-    const { email, password, role } = req.body;
+    const { email, password, role } = req.validatedBody;
+
+    const isAdminRole = req.admin.role === 'admin';
+    const isSelf = String(req.admin.id) === String(userId);
+    if (!isSelf && !isAdminRole) {
+      auditLog('USER_UPDATE_DENIED', req.admin.username, { targetUserId: userId });
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+    if (role !== undefined && !isAdminRole) {
+      return res.status(403).json({ success: false, message: 'Only an admin can change roles' });
+    }
 
     if (!MONGO_URI || mongoose.connection.readyState !== 1) {
       return res.status(400).json({ success: false, message: 'Database required' });
     }
+    if (!mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid user id' });
+    }
 
-    const updateData = { email };
-    if (password) {
-      updateData.password = await bcryptjs.hash(password, 10);
-    }
-    if (role && req.admin.role === 'admin') {
-      updateData.role = role;
-    }
+    const updateData = {};
+    if (email !== undefined) updateData.email = email;
+    if (password !== undefined) updateData.password = await bcryptjs.hash(password, 10);
+    if (role !== undefined) updateData.role = role;
 
     const updatedAdmin = await Admin.findByIdAndUpdate(userId, updateData, { new: true });
+    if (!updatedAdmin) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    auditLog('USER_UPDATED', req.admin.username, {
+      targetUserId: userId,
+      updatedFields: Object.keys(updateData)
+    });
     res.json({ success: true, admin: { username: updatedAdmin.username, email: updatedAdmin.email, role: updatedAdmin.role } });
-    log('INFO', `Admin user updated: ${updatedAdmin.username}`);
   } catch (error) {
+    if (error && error.code === 11000) {
+      return res.status(409).json({ success: false, message: 'That email is already in use' });
+    }
     log('ERROR', 'User update error:', error.message);
     res.status(500).json({ success: false, message: 'Error updating user' });
   }

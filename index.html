@@ -1642,7 +1642,7 @@
 
             const bookingId = currentBooking.bookingNumber;
             const link = document.createElement('a');
-            link.href = `${API_URL.replace('/api', '')}/bookings/${bookingId}/receipt/pdf`;
+            link.href = `${API_URL}/bookings/${encodeURIComponent(bookingId)}/receipt/pdf?token=${encodeURIComponent(currentBooking.receiptToken || '')}`;
             link.download = `booking-${bookingId}.pdf`;
             document.body.appendChild(link);
             link.click();
@@ -1657,7 +1657,7 @@
             }
 
             const bookingId = currentBooking.bookingNumber;
-            fetch(`${API_URL.replace('/api', '')}/bookings/${bookingId}/receipt/image`)
+            fetch(`${API_URL}/bookings/${encodeURIComponent(bookingId)}/receipt/image?token=${encodeURIComponent(currentBooking.receiptToken || '')}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.success && data.qrCode) {
@@ -1673,6 +1673,8 @@
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
+                    } else {
+                        alert('Could not generate the QR code. Please try again.');
                     }
                 })
                 .catch(error => {
