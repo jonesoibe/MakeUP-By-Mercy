@@ -977,7 +977,7 @@
                 </div>
                 <div class="fact" data-reveal style="--i:2">
                     <span class="eyebrow">Hours</span>
-                    <p>Available every day, 9AM to 8PM.</p>
+                    <p id="factHours">Available every day, 9AM to 8PM.</p>
                 </div>
                 <div class="fact" data-reveal style="--i:3">
                     <span class="eyebrow">Where</span>
@@ -1256,7 +1256,7 @@
                 <div>
                     <h4>Phone / WhatsApp</h4>
                     <a href="tel:+2348132168881" class="big">+234 813 216 8881</a>
-                    <p class="sub">Available Mon–Sun, 9AM–8PM</p>
+                    <p class="sub" id="contactHours">Available Mon–Sun, 9AM–8PM</p>
                 </div>
                 <div>
                     <h4>Location</h4>
@@ -1428,7 +1428,13 @@
             const maxDate = new Date();
             maxDate.setFullYear(maxDate.getFullYear() + 1);
 
-            if (selectedDate < today) {
+            if (bookingLeadDays > 0 && value < dateInput.min) {
+                dateError.textContent = `Bookings need at least ${bookingLeadDays} day${bookingLeadDays === 1 ? '' : 's'} notice`;
+                dateError.classList.add('show');
+                formGroup.classList.add('error');
+                formGroup.classList.remove('success');
+                return false;
+            } else if (selectedDate < today) {
                 dateError.textContent = 'Please select a future date';
                 dateError.classList.add('show');
                 formGroup.classList.add('error');
@@ -1572,6 +1578,49 @@
         }
 
         document.addEventListener('DOMContentLoaded', loadPublicPricing);
+
+        // Business hours and booking notice period, as saved by the owner in
+        // the admin Settings. Nothing changes on the page until they have
+        // saved them at least once (`configured`).
+        let bookingLeadDays = 0;
+
+        function formatClock(hhmm) {
+            const [h, m] = hhmm.split(':').map(Number);
+            const suffix = h >= 12 ? 'PM' : 'AM';
+            const hour12 = h % 12 === 0 ? 12 : h % 12;
+            return m ? `${hour12}:${String(m).padStart(2, '0')}${suffix}` : `${hour12}${suffix}`;
+        }
+
+        async function loadAvailability() {
+            try {
+                const response = await fetch(`${API_URL}/availability`);
+                const data = await response.json();
+                const a = data.availability;
+                if (!data.success || !a || !a.configured) return;
+
+                const weekday = `${formatClock(a.weekdayStart)} to ${formatClock(a.weekdayEnd)}`;
+                const weekend = `${formatClock(a.weekendStart)} to ${formatClock(a.weekendEnd)}`;
+                const sameHours = weekday === weekend;
+
+                const factEl = document.getElementById('factHours');
+                const contactEl = document.getElementById('contactHours');
+                if (factEl) factEl.textContent = sameHours ? `Available every day, ${weekday}.` : `Mon–Fri ${weekday}. Sat–Sun ${weekend}.`;
+                if (contactEl) contactEl.textContent = sameHours ? `Available Mon–Sun, ${weekday}` : `Mon–Fri ${weekday} · Sat–Sun ${weekend}`;
+
+                // Earliest bookable date: today + notice period (UTC, like the server)
+                bookingLeadDays = a.leadTimeDays || 0;
+                if (bookingLeadDays > 0) {
+                    const earliest = new Date();
+                    earliest.setUTCHours(0, 0, 0, 0);
+                    earliest.setUTCDate(earliest.getUTCDate() + bookingLeadDays);
+                    document.getElementById('date').min = earliest.toISOString().slice(0, 10);
+                }
+            } catch (error) {
+                console.warn('Could not load availability:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAvailability);
 
         // ========== CONFIRMATION MODAL ==========
         // Store current booking for receipt download

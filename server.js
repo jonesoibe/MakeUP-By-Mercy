@@ -411,6 +411,38 @@ function stripLineBreaks(value) {
 // Where the admin console lives, for links in owner emails.
 const ADMIN_URL = `${(process.env.CLIENT_URL || `http://localhost:${PORT}`).replace(/\/+$/, '')}/admin`;
 
+// Last-resort copy of the confirmation template, used only if neither the
+// database nor the in-memory store has one (matches the seeded default).
+const DEFAULT_CONFIRMATION_TEMPLATE = {
+  type: 'confirmation',
+  subject: 'Your MakeUP By Mercy Booking Confirmed - ID: {bookingNumber}',
+  body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!'
+};
+
+// Replace {placeholders} with values; unknown placeholders are left as-is.
+function renderTemplate(text, values) {
+  return String(text).replace(/\{(\w+)\}/g, (match, key) =>
+    Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match
+  );
+}
+
+// Fetch an email template from wherever templates currently live, so edits
+// made in the admin Settings > Email Templates tab actually reach customers.
+async function getEmailTemplate(type) {
+  try {
+    if (isDbConnected()) {
+      const stored = await EmailTemplate.findOne({ type }).lean();
+      if (stored) return stored;
+    } else {
+      const stored = emailTemplatesMemory.find(t => t.type === type);
+      if (stored) return stored;
+    }
+  } catch (error) {
+    log('WARN', `Could not load ${type} email template, using default:`, error.message);
+  }
+  return type === 'confirmation' ? DEFAULT_CONFIRMATION_TEMPLATE : null;
+}
+
 // Function to send confirmation email to CLIENT
 async function sendConfirmationEmail(booking) {
   try {
@@ -421,10 +453,30 @@ async function sendConfirmationEmail(booking) {
 
     log('INFO', `Sending confirmation email to ${booking.email}`);
 
+    const template = await getEmailTemplate('confirmation');
+    const serviceLabel = booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1');
+    const dateLabel = new Date(booking.date).toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC'
+    });
+    const values = {
+      bookingNumber: booking.bookingNumber,
+      name: booking.name,
+      email: booking.email,
+      phone: booking.phone,
+      country: booking.country,
+      service: serviceLabel,
+      date: dateLabel
+    };
+
+    // Subject is plain text; the body is escaped (admin-written text and the
+    // customer's values alike) and then given line breaks.
+    const subject = stripLineBreaks(renderTemplate(template.subject, values));
+    const bodyHtml = escapeHtml(renderTemplate(template.body, values)).split(/\r\n|\r|\n/).join('<br>');
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: booking.email,
-      subject: `Your MakeUP By Mercy Booking Confirmed - ID: ${booking.bookingNumber}`,
+      subject,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #cc3380 0%, #ff69b4 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
@@ -435,30 +487,12 @@ async function sendConfirmationEmail(booking) {
           <div style="background: white; padding: 30px; border: 1px solid #e0e0e0;">
             <p style="color: #333; font-size: 16px;">Hi ${escapeHtml(booking.name)},</p>
 
-            <p style="color: #666; line-height: 1.6;">
-              Thank you for booking with <strong>MakeUP By Mercy</strong>! We're excited to make you look stunning.
-            </p>
-
-            <div style="background: #f2ebf2; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <h3 style="color: #cc3380; margin-top: 0;">Booking Details</h3>
-              <p style="margin: 10px 0;"><strong>Booking ID:</strong> ${booking.bookingNumber}</p>
-              <p style="margin: 10px 0;"><strong>Name:</strong> ${escapeHtml(booking.name)}</p>
-              <p style="margin: 10px 0;"><strong>Phone:</strong> ${escapeHtml(booking.phone)} (${escapeHtml(booking.country)})</p>
-              <p style="margin: 10px 0;"><strong>Email:</strong> ${escapeHtml(booking.email)}</p>
-              <p style="margin: 10px 0;"><strong>Service:</strong> ${escapeHtml(booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1'))}</p>
-              <p style="margin: 10px 0;"><strong>Date:</strong> ${new Date(booking.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            <div style="background: #f2ebf2; padding: 20px; border-radius: 8px; margin: 20px 0; color: #333; line-height: 1.6;">
+              ${bodyHtml}
             </div>
 
             <p style="color: #666; line-height: 1.6;">
               We'll contact you soon to confirm the exact time for your appointment. If you need to reschedule or have any questions, please reply to this email.
-            </p>
-
-            <p style="color: #666; line-height: 1.6;">
-              <strong>What to expect:</strong>
-              <br>✨ Professional makeup application
-              <br>⏱️ Personalized consultation
-              <br>💄 High-quality products
-              <br>📸 Photo-ready results
             </p>
 
             <p style="color: #999; font-size: 14px; margin-top: 30px;">
@@ -469,7 +503,7 @@ async function sendConfirmationEmail(booking) {
           </div>
 
           <div style="background: #333; color: white; padding: 20px; text-align: center; border-radius: 0 0 10px 10px; font-size: 12px;">
-            <p style="margin: 0;">© 2024 MakeUP By Mercy. All rights reserved.</p>
+            <p style="margin: 0;">© ${new Date().getFullYear()} MakeUP By Mercy. All rights reserved.</p>
             <p style="margin: 10px 0 0 0;">For support, contact: support@makeupbymercy.com</p>
           </div>
         </div>
@@ -600,6 +634,9 @@ let emailTemplatesMemory = [
 
 // In-memory availability settings (fallback if MongoDB not connected)
 let availabilityMemory = {
+  // false until an admin saves settings, so nothing changes for customers
+  // until the owner has actually chosen their hours / lead time.
+  configured: false,
   weekdayStart: '09:00',
   weekdayEnd: '20:00',
   weekendStart: '10:00',
@@ -652,6 +689,20 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
   try {
     // Use validated data from middleware
     const { name, email, phone, country, service, date } = req.validatedBody;
+
+    // Enforce the admin-set notice period (only once the owner has saved
+    // availability settings). Checked before a booking number is allocated.
+    const availability = await getAvailabilitySettings();
+    if (availability.configured && availability.leadTimeDays > 0) {
+      const earliest = new Date();
+      earliest.setUTCHours(0, 0, 0, 0);
+      earliest.setUTCDate(earliest.getUTCDate() + availability.leadTimeDays);
+      if (new Date(date) < earliest) {
+        const days = availability.leadTimeDays;
+        const message = `Bookings need at least ${days} day${days === 1 ? '' : 's'} notice. Please choose a later date.`;
+        return res.status(400).json({ success: false, message, errors: [{ field: 'date', message }] });
+      }
+    }
 
     // Create booking object with sequential booking number
     bookingCounter++;
@@ -1451,54 +1502,74 @@ async function generateQRCode(data) {
 }
 
 // Generate Receipt as Base64
+// Every line is placed with explicit x/y coordinates. (PDFKit's text() takes
+// x then y, so passing a y value as the 2nd argument moved each line further
+// right as the page filled up.)
 async function generateReceiptPDF(booking) {
   return new Promise((resolve, reject) => {
     try {
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
-      let buffers = [];
+      const doc = new PDFDocument({ size: 'A4', margin: 50 });
+      const buffers = [];
 
       doc.on('data', (data) => buffers.push(data));
-      doc.on('end', () => {
-        const pdf = Buffer.concat(buffers);
-        resolve(pdf.toString('base64'));
-      });
+      doc.on('end', () => resolve(Buffer.concat(buffers).toString('base64')));
+      doc.on('error', reject);
+
+      const left = doc.page.margins.left;
+      const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
       // Title
-      doc.fontSize(24).font('Helvetica-Bold').text('BOOKING RECEIPT', { align: 'center' });
-      doc.fontSize(10).text('MakeUP By Mercy', { align: 'center' });
-      doc.moveTo(40, doc.y + 10).lineTo(560, doc.y + 10).stroke();
+      doc.font('Helvetica-Bold').fontSize(24).text('BOOKING RECEIPT', left, 50, { width: contentWidth, align: 'center' });
+      doc.font('Helvetica').fontSize(10).fillColor('#666666').text('MakeUP By Mercy', left, 82, { width: contentWidth, align: 'center' });
+      doc.moveTo(left, 108).lineTo(left + contentWidth, 108).strokeColor('#cccccc').stroke();
 
-      // Booking Details
-      doc.fontSize(12).font('Helvetica-Bold').text('Booking Details', doc.y + 15);
-      doc.fontSize(10).font('Helvetica');
-      doc.text(`Booking ID: ${booking.bookingNumber}`, doc.y + 5);
-      doc.text(`Name: ${booking.name}`, doc.y + 5);
-      doc.text(`Email: ${booking.email}`, doc.y + 5);
-      doc.text(`Phone: ${booking.phone}`, doc.y + 5);
-      doc.text(`Country: ${booking.country}`, doc.y + 5);
-      doc.text(`Service: ${booking.service.toUpperCase()}`, doc.y + 5);
-      doc.text(`Date: ${new Date(booking.date).toLocaleDateString()}`, doc.y + 5);
-      doc.text(`Status: ${booking.status.toUpperCase()}`, doc.y + 5);
-      doc.text(`Booked On: ${new Date(booking.bookedAt).toLocaleString()}`, doc.y + 5);
+      // Booking details as a label / value table
+      doc.fillColor('#000000').font('Helvetica-Bold').fontSize(12).text('Booking Details', left, 128);
 
-      // QR Code (use cached version for better performance)
+      const rows = [
+        ['Booking ID', booking.bookingNumber],
+        ['Name', booking.name],
+        ['Email', booking.email],
+        ['Phone', booking.phone],
+        ['Country', booking.country],
+        ['Service', String(booking.service).toUpperCase()],
+        ['Date', new Date(booking.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })],
+        ['Status', String(booking.status).toUpperCase()],
+        ['Booked On', new Date(booking.bookedAt).toLocaleString('en-US')]
+      ];
+
+      const valueX = left + 110;
+      let y = 156;
+      rows.forEach(([label, value]) => {
+        doc.font('Helvetica-Bold').fontSize(10).fillColor('#666666').text(label, left, y, { width: 100 });
+        doc.font('Helvetica').fontSize(10).fillColor('#000000').text(String(value === undefined || value === null ? '' : value), valueX, y, { width: contentWidth - 110 });
+        y += 22;
+      });
+
+      // QR code (use cached version for better performance)
+      y += 14;
+      let qrDrawn = false;
       if (booking.qrCode) {
         try {
           const img = Buffer.from(booking.qrCode.replace('data:image/png;base64,', ''), 'base64');
-          doc.image(img, doc.page.margins.left, doc.y + 20, { width: 100, height: 100 });
-          doc.fontSize(9).text('Scan QR code to track your booking', doc.x + 110, doc.y - 80);
+          doc.image(img, left, y, { width: 110, height: 110 });
+          doc.font('Helvetica').fontSize(9).fillColor('#666666')
+            .text('Scan this code to reference your booking.', left + 130, y + 8, { width: contentWidth - 130 })
+            .text(`Booking ID: ${booking.bookingNumber}`, left + 130, y + 28, { width: contentWidth - 130 });
+          qrDrawn = true;
         } catch (error) {
           log('WARN', 'Failed to embed cached QR code in PDF:', error.message);
-          doc.fontSize(9).text('Booking ID: ' + booking.bookingNumber, doc.x + 110, doc.y - 80);
         }
-      } else {
-        doc.fontSize(9).text('Booking ID: ' + booking.bookingNumber, doc.x + 110, doc.y);
+      }
+      if (!qrDrawn) {
+        doc.font('Helvetica').fontSize(9).fillColor('#666666').text(`Booking ID: ${booking.bookingNumber}`, left, y, { width: contentWidth });
       }
 
-      // Footer
-      doc.fontSize(8).font('Helvetica-Oblique');
-      doc.text('Thank you for booking with MakeUP By Mercy!', { align: 'center', y: 750 });
-      doc.text('For more details, visit our website or contact us on WhatsApp', { align: 'center' });
+      // Footer, pinned near the bottom of the page
+      const footerY = doc.page.height - doc.page.margins.bottom - 30;
+      doc.font('Helvetica-Oblique').fontSize(8).fillColor('#666666')
+        .text('Thank you for booking with MakeUP By Mercy!', left, footerY, { width: contentWidth, align: 'center', lineBreak: false })
+        .text('For more details, visit our website or contact us on WhatsApp', left, footerY + 12, { width: contentWidth, align: 'center', lineBreak: false });
 
       doc.end();
     } catch (error) {
@@ -2008,21 +2079,52 @@ app.get('/api/pricing/:service', async (req, res) => {
 
 // ========== AVAILABILITY ENDPOINTS ==========
 
-// GET /api/admin/availability - Retrieve business hours / lead time (requires JWT admin)
-app.get('/api/admin/availability', verifyAdminToken, async (req, res) => {
+// Current availability settings. `configured` is false until an admin has
+// saved them once; callers only enforce/display them when it is true.
+const AVAILABILITY_DEFAULTS = {
+  weekdayStart: '09:00',
+  weekdayEnd: '20:00',
+  weekendStart: '10:00',
+  weekendEnd: '18:00',
+  leadTimeDays: 1
+};
+
+async function getAvailabilitySettings() {
   try {
     if (MONGO_URI && mongoose.connection.readyState === 1) {
-      let availability = await Availability.findOne();
-      if (!availability) {
-        availability = await Availability.create({});
-      }
-      return res.json({ success: true, availability });
+      const doc = await Availability.findOne().lean();
+      if (doc) return { ...AVAILABILITY_DEFAULTS, ...doc, configured: true };
+      return { ...AVAILABILITY_DEFAULTS, configured: false };
     }
-    res.json({ success: true, availability: availabilityMemory });
+    return { ...AVAILABILITY_DEFAULTS, ...availabilityMemory };
   } catch (error) {
-    logger.error('Availability fetch error:', error.message);
-    res.status(500).json({ success: false, message: 'Error fetching availability' });
+    logger.error('Availability lookup error:', error.message);
+    return { ...AVAILABILITY_DEFAULTS, configured: false };
   }
+}
+
+// GET /api/availability - Public: hours and notice period for the booking page
+app.get('/api/availability', async (req, res) => {
+  const a = await getAvailabilitySettings();
+  res.json({
+    success: true,
+    availability: {
+      configured: a.configured,
+      weekdayStart: a.weekdayStart,
+      weekdayEnd: a.weekdayEnd,
+      weekendStart: a.weekendStart,
+      weekendEnd: a.weekendEnd,
+      leadTimeDays: a.leadTimeDays
+    }
+  });
+});
+
+// GET /api/admin/availability - Retrieve business hours / lead time (requires JWT admin)
+// Returns the defaults without saving them: creating the document here would
+// silently switch on lead-time enforcement just because someone opened Settings.
+app.get('/api/admin/availability', verifyAdminToken, async (req, res) => {
+  const availability = await getAvailabilitySettings();
+  res.json({ success: true, availability });
 });
 
 // PATCH /api/admin/availability - Update business hours / lead time (requires JWT admin)
@@ -2048,7 +2150,7 @@ app.patch('/api/admin/availability', verifyAdminToken, requireRole('admin'), val
       return res.json({ success: true, availability });
     }
 
-    Object.assign(availabilityMemory, updates);
+    Object.assign(availabilityMemory, updates, { configured: true });
     auditLog('AVAILABILITY_UPDATE', req.admin.username, updates);
     res.json({ success: true, availability: availabilityMemory });
   } catch (error) {
