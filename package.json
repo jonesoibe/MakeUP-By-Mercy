@@ -9,7 +9,10 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "keywords": [
     "makeup",
@@ -34,5 +37,10 @@
     "qrcode": "^1.5.3",
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "mongodb-memory-server": "^9.5.0",
+    "supertest": "^7.3.0"
   }
 }

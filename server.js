@@ -15,7 +15,11 @@ const Joi = require('joi');
 const winston = require('winston');
 const swaggerUi = require('swagger-ui-express');
 const swaggerDocument = require('./swagger.json');
-require('dotenv').config();
+// Tests supply their own environment; never let a developer's real .env
+// (which may point at the live database) leak into a test run.
+if (process.env.NODE_ENV !== 'test') {
+  require('dotenv').config();
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +44,7 @@ if (!fs.existsSync(logsDir)) {
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
+  silent: process.env.NODE_ENV === 'test',
   format: winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.errors({ stack: true }),
@@ -2341,10 +2346,13 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
-  log('INFO', `Server listening on http://localhost:${PORT}`);
-});
+// Start server (only when run directly, so tests can import the app without
+// opening a port)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    log('INFO', `Server listening on http://localhost:${PORT}`);
+  });
+}
 
 // ========== ERROR HANDLING MIDDLEWARE ==========
 // Log errors but don't expose stack traces to clients
@@ -2378,3 +2386,5 @@ app.use((req, res) => {
     message: 'Endpoint not found'
   });
 });
+
+module.exports = app;

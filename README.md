@@ -84,6 +84,23 @@ OWNER_EMAIL=admin-email@gmail.com
 
 ## 🧪 Testing
 
+### Automated tests
+
+```bash
+npm test               # run everything
+npm run test:watch     # re-run on change
+npm run test:coverage  # with a coverage report (fails if it drops below the floor)
+```
+
+- `tests/security.test.js` - static-file exposure, login and permission rules, CORS, rate limits
+- `tests/bookings.test.js` - booking validation, notice period, emails and templates, receipts
+- `tests/admin.test.js` - dashboard maths, pricing, admin actions
+- `tests/db.test.js` - the same app against a real (in-memory) MongoDB: admin accounts, persistence, booking counter, settings
+
+Tests never read your `.env`, never send real email (SendGrid is mocked) and never touch a real database. The first run of `tests/db.test.js` downloads a MongoDB binary (about 130 MB, cached afterwards in `node_modules/.cache`). Helpers live in `tests/helpers/app.js`.
+
+### Manual checks
+
 1. **Booking**: Fill form, verify email received
 2. **Admin**: Login at `/admin-login` with the admin account stored in the database. Without a database (local development only), set `DEV_ADMIN_PASSWORD` in `.env` and log in as `admin`.
 3. **Analytics**: Check dashboard stats
