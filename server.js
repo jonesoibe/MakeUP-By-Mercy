@@ -320,8 +320,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files
-app.use(express.static(__dirname));
+// Serve static files. Only the files the site actually needs are exposed.
+// Serving the whole project directory made server.js, package.json, logs/
+// and docs such as MONGODB_CREDENTIALS.md publicly downloadable.
+app.use('/Pictures', express.static(path.join(__dirname, 'Pictures'), { dotfiles: 'ignore', index: false }));
+
+const PUBLIC_FILES = ['index.html', 'admin.html', 'admin-login.html', 'admin.js', 'admin-login.js'];
+PUBLIC_FILES.forEach((file) => {
+  app.get(`/${file}`, (req, res) => res.sendFile(path.join(__dirname, file)));
+});
 
 // ========== SWAGGER API DOCUMENTATION ==========
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
@@ -550,7 +557,7 @@ let pricingMemory = [
 // API Routes
 
 // GET all bookings (admin route)
-app.get('/api/bookings', async (req, res) => {
+app.get('/api/bookings', verifyAdminToken, async (req, res) => {
   try {
     let allBookings;
 
@@ -669,8 +676,8 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
   }
 });
 
-// GET booking by ID
-app.get('/api/bookings/:id', async (req, res) => {
+// GET booking by ID (admin route)
+app.get('/api/bookings/:id', verifyAdminToken, async (req, res) => {
   try {
     let booking;
 
@@ -702,10 +709,11 @@ app.get('/api/bookings/:id', async (req, res) => {
   }
 });
 
-// CANCEL booking
-app.delete('/api/bookings/:id', async (req, res) => {
+// DELETE booking (admin or manager only; viewers are read-only)
+app.delete('/api/bookings/:id', verifyAdminToken, requireRole('admin', 'manager'), async (req, res) => {
   try {
     const bookingId = parseInt(req.params.id);
+    auditLog('BOOKING_DELETE', req.admin.username, { bookingId });
 
     if (MONGO_URI && mongoose.connection.readyState === 1) {
       const result = await Booking.deleteOne({ id: bookingId });
@@ -957,14 +965,24 @@ app.post('/api/admin/login', authLimiter, validateRequest(adminLoginSchema), asy
     const { username, password } = req.validatedBody;
     log('INFO', `Admin login attempt: ${username}`);
 
+    const dbReady = MONGO_URI && mongoose.connection.readyState === 1;
+    // Local development without a database may log in with a password taken
+    // from DEV_ADMIN_PASSWORD. It is never enabled in production, nor when a
+    // database is configured but temporarily unreachable - otherwise a
+    // database blip would let anyone in with a guessable password.
+    const devPassword = process.env.DEV_ADMIN_PASSWORD;
+    const devFallbackAllowed = !MONGO_URI && process.env.NODE_ENV !== 'production' && !!devPassword;
+
     let admin = null;
-    if (MONGO_URI && mongoose.connection.readyState === 1) {
+    if (dbReady) {
       admin = await Admin.findOne({ username, active: true });
-    } else {
-      // Fallback for development without MongoDB
-      if (username === 'admin' && password === 'admin123') {
+    } else if (devFallbackAllowed) {
+      if (username === 'admin' && password === devPassword) {
         admin = { username: 'admin', role: 'admin', email: 'admin@makeup-mercy.com' };
       }
+    } else {
+      log('WARN', 'Admin login refused: database not connected');
+      return res.status(503).json({ success: false, message: 'Admin login is temporarily unavailable. Please try again shortly.' });
     }
 
     if (!admin) {
@@ -973,15 +991,12 @@ app.post('/api/admin/login', authLimiter, validateRequest(adminLoginSchema), asy
     }
 
     // Verify password
-    if (MONGO_URI && mongoose.connection.readyState === 1) {
+    if (dbReady) {
       const isPasswordValid = await bcryptjs.compare(password, admin.password);
       if (!isPasswordValid) {
         auditLog('LOGIN_FAILED', username, { reason: 'invalid_password', ip: req.ip });
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
       }
-    } else if (admin.username !== 'admin' || password !== 'admin123') {
-      auditLog('LOGIN_FAILED', username, { reason: 'invalid_password', ip: req.ip });
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     // Generate JWT Token

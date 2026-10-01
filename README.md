@@ -85,7 +85,7 @@ OWNER_EMAIL=admin-email@gmail.com
 ## 🧪 Testing
 
 1. **Booking**: Fill form, verify email received
-2. **Admin**: Login with admin/admin123
+2. **Admin**: Login at `/admin-login` with the admin account stored in the database. Without a database (local development only), set `DEV_ADMIN_PASSWORD` in `.env` and log in as `admin`.
 3. **Analytics**: Check dashboard stats
 
 ## 📊 Tech Stack
