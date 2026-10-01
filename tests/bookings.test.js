@@ -21,15 +21,37 @@ describe('creating a booking', () => {
       service: 'bridal',
       country: 'Nigeria'
     });
-    expect(res.body.booking.bookingNumber).toMatch(/^MKP-\d{5}$/);
+    expect(res.body.booking.bookingNumber).toMatch(/^[A-Z]{3}-\d{8}-\d{4}-\d{2}$/);
     expect(res.body.booking.receiptToken).toMatch(/^[0-9a-f]{32}$/);
   });
 
-  test('booking numbers increase by one', async () => {
-    const first = (await book()).body.booking.bookingNumber;
-    const second = (await book()).body.booking.bookingNumber;
-    const n = (id) => parseInt(id.split('-')[1], 10);
-    expect(n(second)).toBe(n(first) + 1);
+  test.each([
+    ['bridal', 'BRD'],
+    ['party', 'PTY'],
+    ['casual', 'CSL']
+  ])('a %s booking number starts with %s, then the appointment date and time', async (service, code) => {
+    const res = await book(validBooking({ service, date: '2030-03-15', time: '14:30' }));
+    expect(res.body.booking.bookingNumber).toBe(`${code}-20300315-1430-01`);
+    expect(res.body.booking.time).toBe('14:30');
+  });
+
+  test('bookings for the same slot get 01, 02, 03... and other slots start again at 01', async () => {
+    const slot = { service: 'bridal', date: '2030-03-15', time: '09:00' };
+    const numbers = [];
+    for (let i = 0; i < 3; i += 1) numbers.push((await book(validBooking(slot))).body.booking.bookingNumber);
+    expect(numbers).toEqual(['BRD-20300315-0900-01', 'BRD-20300315-0900-02', 'BRD-20300315-0900-03']);
+
+    expect((await book(validBooking({ ...slot, time: '09:30' }))).body.booking.bookingNumber).toBe('BRD-20300315-0930-01');
+    expect((await book(validBooking({ ...slot, date: '2030-03-16' }))).body.booking.bookingNumber).toBe('BRD-20300316-0900-01');
+    expect((await book(validBooking({ ...slot, service: 'party' }))).body.booking.bookingNumber).toBe('PTY-20300315-0900-01');
+  });
+
+  test('concurrent bookings for the same slot all get different numbers', async () => {
+    const results = await Promise.all([1, 2, 3, 4, 5, 6].map((i) => book(validBooking({ email: `race${i}@example.com`, date: '2030-04-01', time: '11:00' }))));
+    results.forEach((r) => expect(r.status).toBe(201));
+    const numbers = results.map((r) => r.body.booking.bookingNumber);
+    expect(new Set(numbers).size).toBe(6);
+    numbers.forEach((n) => expect(n).toMatch(/^BRD-20300401-1100-0[1-6]$/));
   });
 
   test('normalises the email address and trims the name', async () => {
@@ -63,7 +85,12 @@ describe('booking validation', () => {
     ['service missing', { service: undefined }, 'service'],
     ['date missing', { date: undefined }, 'date'],
     ['date not a date', { date: 'tomorrow' }, 'date'],
-    ['date in the past', { date: isoDate(-1) }, 'date']
+    ['date in the past', { date: isoDate(-1) }, 'date'],
+    ['time missing', { time: undefined }, 'time'],
+    ['time not a time', { time: 'noon' }, 'time'],
+    ['time without a leading zero', { time: '9:00' }, 'time'],
+    ['time past 23:59', { time: '25:00' }, 'time'],
+    ['time with seconds', { time: '10:00:00' }, 'time']
   ];
 
   test.each(invalid)('%s -> 400 naming the field', async (_label, override, field) => {
@@ -88,6 +115,56 @@ describe('booking validation', () => {
     const res = await book({ ...validBooking(), status: 'completed', admin: true });
     expect(res.status).toBe(201);
     expect(res.body.booking.status).toBeUndefined();
+  });
+});
+
+describe('appointment time and opening hours', () => {
+  const saveHours = (hours) =>
+    request(app).patch('/api/admin/availability').set(authHeader()).send({
+      weekdayStart: '09:00', weekdayEnd: '17:00', weekendStart: '11:00', weekendEnd: '15:00', leadTimeDays: 0, ...hours
+    });
+
+  // 2030-03-14 is a Thursday; 2030-03-16 is a Saturday
+  const WEEKDAY = '2030-03-14';
+  const WEEKEND = '2030-03-16';
+
+  test('before hours are saved, 9AM-8PM applies every day', async () => {
+    expect((await book(validBooking({ date: WEEKDAY, time: '09:00' }))).status).toBe(201);
+    expect((await book(validBooking({ date: WEEKEND, time: '19:30' }))).status).toBe(201);
+    const early = await book(validBooking({ date: WEEKDAY, time: '08:30' }));
+    expect(early.status).toBe(400);
+    expect(early.body.errors[0].field).toBe('time');
+    expect((await book(validBooking({ date: WEEKDAY, time: '20:00' }))).status).toBe(400);
+  });
+
+  test('saved weekday hours apply on weekdays: start included, closing time excluded', async () => {
+    await saveHours();
+    expect((await book(validBooking({ date: WEEKDAY, time: '09:00' }))).status).toBe(201);
+    expect((await book(validBooking({ date: WEEKDAY, time: '16:30' }))).status).toBe(201);
+    const late = await book(validBooking({ date: WEEKDAY, time: '17:00' }));
+    expect(late.status).toBe(400);
+    expect(late.body.message).toMatch(/9:00 AM and 5:00 PM on weekdays/);
+    expect((await book(validBooking({ date: WEEKDAY, time: '08:59' }))).status).toBe(400);
+  });
+
+  test('saved weekend hours apply on Saturday and Sunday', async () => {
+    await saveHours();
+    expect((await book(validBooking({ date: WEEKEND, time: '11:00' }))).status).toBe(201);
+    const early = await book(validBooking({ date: WEEKEND, time: '09:00' }));
+    expect(early.status).toBe(400);
+    expect(early.body.message).toMatch(/11:00 AM and 3:00 PM on weekends/);
+    // Sunday
+    expect((await book(validBooking({ date: '2030-03-17', time: '15:00' }))).status).toBe(400);
+  });
+
+  test('the time is returned, emailed and shown on the receipt', async () => {
+    const res = await book(validBooking({ date: WEEKDAY, time: '14:00', email: 'time@example.com' }));
+    expect(res.body.booking.time).toBe('14:00');
+    await waitFor(() => sent.some((m) => m.to === 'time@example.com'));
+    expect(sent.find((m) => m.to === 'time@example.com').html).toContain('2:00 PM');
+    const owner = sent.find((m) => m.to === 'owner@example.com');
+    expect(owner.html).toContain('Appointment Time:');
+    expect(owner.html).toContain('2:00 PM');
   });
 });
 
@@ -148,7 +225,7 @@ describe('emails', () => {
     await book(validBooking({ email: 'who@example.com' }));
     await waitFor(() => hasEmail('who@example.com') && hasEmail('owner@example.com'));
     const customer = sent.find((m) => m.to === 'who@example.com');
-    expect(customer.subject).toMatch(/Booking Confirmed - ID: MKP-\d{5}/);
+    expect(customer.subject).toMatch(/Booking Confirmed - ID: [A-Z]{3}-\d{8}-\d{4}-\d{2}/);
     expect(customer.from).toBe('from@example.com');
   });
 
@@ -191,7 +268,7 @@ describe('emails', () => {
       await waitFor(() => hasEmail('ada@example.com'));
 
       const mail = sent.find((m) => m.to === 'ada@example.com');
-      expect(mail.subject).toMatch(/^Hi Ada Obi - MKP-\d{5}$/);
+      expect(mail.subject).toMatch(/^Hi Ada Obi - [A-Z]{3}-\d{8}-\d{4}-\d{2}$/);
       expect(mail.html).toContain('Dear Ada Obi, your Party is on');
       expect(mail.html).toContain('+2348012345678 (Nigeria)');
       expect(mail.html).toContain('{nope}');

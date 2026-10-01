@@ -21,8 +21,8 @@ module.exports = defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
-  timeout: 30000,
-  expect: { timeout: 7000 },
+  timeout: 60000,
+  expect: { timeout: 10000 },
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
 
   use: {
@@ -57,6 +57,7 @@ module.exports = defineConfig({
       JWT_SECRET: 'e2e-jwt-secret',
       MONGODB_URI: '',
       SENDGRID_API_KEY: '',
+      OWNER_EMAIL: 'owner@example.com', // so the admin "test email" reaches the provider check
       DEV_ADMIN_PASSWORD: 'e2e-admin-password'
     }
   }

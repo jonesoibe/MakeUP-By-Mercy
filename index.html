@@ -666,6 +666,7 @@
         .form-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 28px; align-items: start; }
 
         .form-group { position: relative; display: grid; gap: 4px; }
+        .form-row.form-row-even { grid-template-columns: 1fr 1fr; }
 
         .form-group label {
             font-size: 0.6875rem;
@@ -732,6 +733,86 @@
         .form-submit:active { transform: scale(0.97); }
         .form-submit:disabled { opacity: 0.6; cursor: progress; }
         @media (hover: hover) { .form-submit:not(:disabled):hover { background: var(--blush); } }
+
+
+        /* ========== OPTIONAL PHOTO UPLOAD ========== */
+        .photo-field { gap: 10px; }
+
+        .photo-field .field-label {
+            font-size: 0.6875rem;
+            font-weight: 500;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: rgba(243, 239, 232, 0.7);
+        }
+
+        .photo-field .field-label em { text-transform: none; letter-spacing: 0; font-family: var(--serif); font-size: 0.95rem; }
+        .photo-field .field-hint { color: rgba(243, 239, 232, 0.65); font-size: 0.875rem; max-width: 52ch; text-wrap: pretty; }
+
+        /* The real input stays in the page (keyboard and screen readers) but is not drawn */
+        .photo-field input[type="file"] {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            border: 0;
+        }
+
+        .photo-field label.photo-drop {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 18px;
+            border: 1px dashed var(--line-light);
+            border-radius: 4px;
+            color: var(--cream);
+            font-size: 0.9375rem;
+            font-weight: 400;
+            letter-spacing: 0;
+            text-transform: none;
+            cursor: pointer;
+            transition: background-color 200ms ease, border-color 200ms ease, transform 160ms ease-out;
+        }
+
+        .photo-field label.photo-drop:active { transform: scale(0.99); }
+        .photo-field label.photo-drop small { margin-left: auto; color: rgba(243, 239, 232, 0.55); font-size: 0.75rem; }
+        .photo-field .photo-drop-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line-light); border-radius: 50%; font-size: 1.1rem; line-height: 1; }
+        .photo-field:focus-within label.photo-drop { border-color: var(--cream); }
+        @media (hover: hover) { .photo-field label.photo-drop:hover { background: rgba(243, 239, 232, 0.06); border-color: var(--cream); } }
+
+        .photo-preview { display: flex; align-items: center; gap: 16px; }
+        .photo-preview[hidden], .photo-field label.photo-consent[hidden], .photo-field label.photo-drop[hidden] { display: none; }
+        .photo-preview img { width: 88px; height: 88px; object-fit: cover; border-radius: 4px; background: var(--mocha); }
+        .photo-preview p { font-size: 0.875rem; color: var(--cream); word-break: break-word; }
+        .photo-preview small { display: block; color: rgba(243, 239, 232, 0.6); margin-bottom: 8px; }
+        .photo-preview .link-arrow { color: var(--cream); font-size: 0.8125rem; }
+
+        .photo-field label.photo-consent {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 0.875rem;
+            font-weight: 400;
+            letter-spacing: 0;
+            text-transform: none;
+            color: rgba(243, 239, 232, 0.85);
+            cursor: pointer;
+        }
+
+        .photo-field .photo-consent input[type="checkbox"] {
+            flex: none;
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+            padding: 0;
+            border: 1px solid var(--cream);
+            accent-color: var(--blush);
+            appearance: auto;
+            -webkit-appearance: auto;
+        }
 
         /* ========== CONTACT ========== */
         .contact { background: var(--cream); }
@@ -1236,10 +1317,42 @@
                     </select>
                     <div class="error-message" id="serviceError"></div>
                 </div>
-                <div class="form-group">
-                    <label for="date">Preferred date <span class="required-indicator">*</span></label>
-                    <input type="date" id="date" name="date" onchange="validateDate()">
-                    <div class="error-message" id="dateError"></div>
+                <div class="form-row form-row-even">
+                    <div class="form-group">
+                        <label for="date">Preferred date <span class="required-indicator">*</span></label>
+                        <input type="date" id="date" name="date" onchange="validateDate()">
+                        <div class="error-message" id="dateError"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="time">Preferred time <span class="required-indicator">*</span></label>
+                        <select id="time" name="time" onchange="validateTime()">
+                            <option value="">Select a time</option>
+                        </select>
+                        <div class="error-message" id="timeError"></div>
+                    </div>
+                </div>
+                <div class="form-group photo-field" id="photoField">
+                    <span class="field-label">Your photo <em>(optional)</em></span>
+                    <p class="field-hint" id="photoHint">Share a photo of your skin or a look you love, so Mercy can prepare. Only Mercy can see it, and it is deleted after 90 days.</p>
+                    <input type="file" id="photoInput" accept="image/jpeg,image/png,image/webp" aria-describedby="photoHint">
+                    <label for="photoInput" class="photo-drop" id="photoDrop">
+                        <span class="photo-drop-icon" aria-hidden="true">+</span>
+                        <span>Add a photo</span>
+                        <small>JPG, PNG or WebP</small>
+                    </label>
+                    <div class="photo-preview" id="photoPreview" hidden>
+                        <img id="photoThumb" alt="Preview of the photo you chose">
+                        <div>
+                            <p id="photoName"></p>
+                            <small id="photoSize"></small>
+                            <button type="button" class="link-arrow" id="photoRemove">Remove photo</button>
+                        </div>
+                    </div>
+                    <label class="photo-consent" id="photoConsent" hidden>
+                        <input type="checkbox" id="photoConsentBox">
+                        <span>I'm happy for Mercy to view this photo to prepare for my appointment.</span>
+                    </label>
+                    <div class="error-message" id="photoError" role="alert"></div>
                 </div>
                 <button type="submit" class="form-submit" id="submitBtn">Book appointment <span>↗</span></button>
             </form>
@@ -1305,6 +1418,8 @@
                 <p style="font-size: 12px; color: #6b5f5b; margin-bottom: 10px;">Scan to track your booking:</p>
                 <div id="qrCodeDisplay" style="text-align: center;"></div>
             </div>
+
+            <p class="confirmation-hint" id="photoStatus" role="status" hidden></p>
 
             <p class="confirmation-hint">Save your booking number for future reference</p>
 
@@ -1459,6 +1574,50 @@
         }
 
         // ========== BOOKING ==========
+        function validateTime() {
+            const select = document.getElementById('time');
+            const error = document.getElementById('timeError');
+            const group = select.closest('.form-group');
+            if (!select.value) {
+                error.textContent = 'Please select a time';
+                error.classList.add('show');
+                group.classList.add('error');
+                return false;
+            }
+            error.classList.remove('show');
+            group.classList.remove('error');
+            return true;
+        }
+
+        // Opening hours used for the time list: the owner's saved hours once they
+        // exist, otherwise the site's stated 9AM-8PM every day.
+        let openingHours = { weekday: ['09:00', '20:00'], weekend: ['09:00', '20:00'] };
+
+        // Appointment start times, every 30 minutes from opening until closing
+        function buildTimeOptions() {
+            const select = document.getElementById('time');
+            const dateValue = document.getElementById('date').value;
+            const weekend = dateValue && [0, 6].includes(new Date(dateValue).getUTCDay());
+            const [start, end] = weekend ? openingHours.weekend : openingHours.weekday;
+            const toMinutes = (hhmm) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; };
+
+            const previous = select.value;
+            select.innerHTML = '<option value="">Select a time</option>';
+            for (let t = toMinutes(start); t < toMinutes(end); t += 30) {
+                const value = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = formatClock(value);
+                select.appendChild(option);
+            }
+            if ([...select.options].some((o) => o.value === previous)) select.value = previous;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            buildTimeOptions();
+            document.getElementById('date').addEventListener('change', buildTimeOptions);
+        });
+
         async function handleBooking(event) {
             event.preventDefault();
 
@@ -1468,8 +1627,10 @@
             const isPhoneValid = validatePhone();
             const isServiceValid = validateService();
             const isDateValid = validateDate();
+            const isTimeValid = validateTime();
+            const isPhotoValid = validatePhoto();
 
-            if (!isNameValid || !isEmailValid || !isPhoneValid || !isServiceValid || !isDateValid) {
+            if (!isNameValid || !isEmailValid || !isPhoneValid || !isServiceValid || !isDateValid || !isTimeValid || !isPhotoValid) {
                 return;
             }
 
@@ -1481,6 +1642,7 @@
             const country = document.getElementById('country').value;
             const service = document.getElementById('service').value;
             const date = document.getElementById('date').value;
+            const time = document.getElementById('time').value;
 
             // Disable button and show loading state
             button.disabled = true;
@@ -1498,7 +1660,8 @@
                         phone: phone,
                         country: country,
                         service: service,
-                        date: date
+                        date: date,
+                        time: time
                     })
                 });
 
@@ -1507,6 +1670,13 @@
                 if (data.success) {
                     // Show custom confirmation modal
                     showConfirmationModal(data.booking);
+
+                    // Optional photo: upload it now that the booking exists
+                    document.getElementById('photoStatus').hidden = true;
+                    if (selectedPhoto) {
+                        uploadBookingPhoto(data.booking);
+                        clearPhoto();
+                    }
 
                     // Reset form
                     event.target.reset();
@@ -1612,6 +1782,9 @@
                 if (factEl) factEl.textContent = sameHours ? `Available every day, ${weekday}.` : `Mon–Fri ${weekday}. Sat–Sun ${weekend}.`;
                 if (contactEl) contactEl.textContent = sameHours ? `Available Mon–Sun, ${weekday}` : `Mon–Fri ${weekday} · Sat–Sun ${weekend}`;
 
+                openingHours = { weekday: [a.weekdayStart, a.weekdayEnd], weekend: [a.weekendStart, a.weekendEnd] };
+                buildTimeOptions();
+
                 // Earliest bookable date: today + notice period (UTC, like the server)
                 bookingLeadDays = a.leadTimeDays || 0;
                 if (bookingLeadDays > 0) {
@@ -1626,6 +1799,133 @@
         }
 
         document.addEventListener('DOMContentLoaded', loadAvailability);
+
+
+        // ========== OPTIONAL PHOTO ==========
+        // The browser resizes and re-encodes the photo as JPEG before upload: it
+        // keeps the file small and drops hidden metadata such as GPS location.
+        // The server checks it again (type, signature, 3 MB cap).
+        const PHOTO_MAX_SIDE = 1200;
+        const PHOTO_MAX_INPUT_BYTES = 20 * 1024 * 1024;
+        let selectedPhoto = null; // { blob, name }
+        let photoPreviewUrl = null;
+
+        function showPhotoError(message) {
+            const el = document.getElementById('photoError');
+            el.textContent = message;
+            el.classList.add('show');
+        }
+
+        function clearPhotoError() {
+            document.getElementById('photoError').classList.remove('show');
+        }
+
+        function resizePhoto(file) {
+            return new Promise((resolve, reject) => {
+                if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type)) {
+                    reject(new Error('Please choose a JPG, PNG or WebP photo.'));
+                    return;
+                }
+                if (file.size > PHOTO_MAX_INPUT_BYTES) {
+                    reject(new Error('That photo is too large. Please choose one under 20 MB.'));
+                    return;
+                }
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+                    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#ffffff'; // PNG transparency becomes white, not black
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    canvas.toBlob((blob) => {
+                        if (!blob) reject(new Error('We could not process that photo. Please try another.'));
+                        else resolve(blob);
+                    }, 'image/jpeg', 0.82);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('We could not read that photo. Please try a JPG or PNG.'));
+                };
+                img.src = url;
+            });
+        }
+
+        function renderPhotoPreview() {
+            const hasPhoto = !!selectedPhoto;
+            document.getElementById('photoDrop').hidden = hasPhoto;
+            document.getElementById('photoPreview').hidden = !hasPhoto;
+            document.getElementById('photoConsent').hidden = !hasPhoto;
+            if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+            photoPreviewUrl = hasPhoto ? URL.createObjectURL(selectedPhoto.blob) : null;
+            document.getElementById('photoThumb').src = photoPreviewUrl || '';
+            if (hasPhoto) {
+                document.getElementById('photoName').textContent = selectedPhoto.name;
+                document.getElementById('photoSize').textContent = `${Math.max(1, Math.round(selectedPhoto.blob.size / 1024))} KB after resizing`;
+            }
+        }
+
+        function clearPhoto() {
+            selectedPhoto = null;
+            document.getElementById('photoInput').value = '';
+            document.getElementById('photoConsentBox').checked = false;
+            clearPhotoError();
+            renderPhotoPreview();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('photoInput');
+            input.addEventListener('change', async () => {
+                const file = input.files[0];
+                if (!file) return;
+                clearPhotoError();
+                try {
+                    selectedPhoto = { blob: await resizePhoto(file), name: file.name };
+                    renderPhotoPreview();
+                } catch (error) {
+                    selectedPhoto = null;
+                    input.value = '';
+                    showPhotoError(error.message);
+                    renderPhotoPreview();
+                }
+            });
+            document.getElementById('photoRemove').addEventListener('click', clearPhoto);
+            document.getElementById('photoConsentBox').addEventListener('change', clearPhotoError);
+        });
+
+        // A photo is optional, but if one is attached the customer must agree to Mercy viewing it
+        function validatePhoto() {
+            if (selectedPhoto && !document.getElementById('photoConsentBox').checked) {
+                showPhotoError('Please tick the box to confirm Mercy may view your photo, or remove the photo.');
+                return false;
+            }
+            clearPhotoError();
+            return true;
+        }
+
+        // Sent after the booking exists, using the receipt token the customer was just given.
+        // A failed upload never loses the booking.
+        async function uploadBookingPhoto(booking) {
+            const statusEl = document.getElementById('photoStatus');
+            statusEl.hidden = false;
+            statusEl.textContent = 'Uploading your photo…';
+            try {
+                const response = await fetch(`${API_URL}/bookings/${encodeURIComponent(booking.bookingNumber)}/photo?token=${encodeURIComponent(booking.receiptToken || '')}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'image/jpeg' },
+                    body: selectedPhoto.blob
+                });
+                statusEl.textContent = response.ok
+                    ? 'Your photo was sent to Mercy.'
+                    : 'We could not upload your photo, but your booking is confirmed. You can send it to Mercy on WhatsApp.';
+            } catch (error) {
+                statusEl.textContent = 'We could not upload your photo, but your booking is confirmed. You can send it to Mercy on WhatsApp.';
+            }
+        }
 
         // ========== CONFIRMATION MODAL ==========
         // Store current booking for receipt download
@@ -1657,7 +1957,8 @@
                 { label: 'Phone:', value: `${booking.phone} (${booking.country})` },
                 { label: 'Email:', value: booking.email },
                 { label: 'Service:', value: serviceDisplay },
-                { label: 'Date:', value: bookingDate }
+                { label: 'Date:', value: bookingDate },
+                { label: 'Time:', value: booking.time ? formatClock(booking.time) : '' }
             ];
 
             details.forEach(detail => {

@@ -59,10 +59,11 @@ test.describe('mobile', () => {
     await page.fill('#phone', '08012345678');
     await page.selectOption('#service', 'casual');
     await page.fill('#date', isoDate(14));
+    await page.selectOption('#time', '13:30');
     await page.getByRole('button', { name: /book appointment/i }).click();
 
     await expect(page.locator('#confirmationModal')).toHaveClass(/show/);
-    await expect(page.locator('#bookingNumber')).toHaveText(/^MKP-\d{5}$/);
+    await expect(page.locator('#bookingNumber')).toHaveText(/^[A-Z]{3}-\d{8}-\d{4}-\d{2}$/);
     // The confirmation fits the screen and its buttons can be reached
     await page.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(page.locator('#confirmationModal')).not.toHaveClass(/show/);

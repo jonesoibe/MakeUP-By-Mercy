@@ -9,6 +9,7 @@ async function fillBookingForm(page, overrides = {}) {
     phone: '08012345678',
     service: 'bridal',
     date: isoDate(12),
+    time: '14:00',
     ...overrides
   };
   await page.fill('#name', data.name);
@@ -16,6 +17,7 @@ async function fillBookingForm(page, overrides = {}) {
   await page.fill('#phone', data.phone);
   await page.selectOption('#service', data.service);
   await page.fill('#date', data.date);
+  await page.selectOption('#time', data.time);
   return data;
 }
 
@@ -30,10 +32,13 @@ test.describe('booking flow', () => {
 
     const modal = page.locator('#confirmationModal');
     await expect(modal).toHaveClass(/show/);
-    await expect(page.locator('#bookingNumber')).toHaveText(/^MKP-\d{5}$/);
+    await expect(page.locator('#bookingNumber')).toHaveText(/^[A-Z]{3}-\d{8}-\d{4}-\d{2}$/);
     await expect(page.locator('#confirmationDetails')).toContainText('Ada Obi');
     await expect(page.locator('#confirmationDetails')).toContainText('ada@example.com');
     await expect(page.locator('#confirmationDetails')).toContainText('Bridal');
+    await expect(page.locator('#confirmationDetails')).toContainText('2PM');
+    // the number reads: type, appointment date, appointment time
+    await expect(page.locator('#bookingNumber')).toContainText(`BRD-${isoDate(12).replace(/-/g, '')}-1400-`);
 
     // The form is cleared after a successful booking
     await expect(page.locator('#name')).toHaveValue('');
@@ -49,7 +54,7 @@ test.describe('booking flow', () => {
       page.waitForEvent('download'),
       page.getByRole('button', { name: 'Download PDF' }).click()
     ]);
-    expect(pdf.suggestedFilename()).toMatch(/^booking-MKP-\d{5}\.pdf$/);
+    expect(pdf.suggestedFilename()).toMatch(/^booking-[A-Z]{3}-\d{8}-\d{4}-\d{2}\.pdf$/);
     expect(fs.readFileSync(await pdf.path()).subarray(0, 5).toString()).toBe('%PDF-');
 
     // QR code
@@ -85,7 +90,7 @@ test.describe('booking flow', () => {
     page.on('request', (req) => { if (req.method() === 'POST' && req.url().endsWith('/api/bookings')) bookingRequests += 1; });
 
     await page.getByRole('button', { name: /book appointment/i }).click();
-    for (const id of ['nameError', 'emailError', 'phoneError', 'serviceError', 'dateError']) {
+    for (const id of ['nameError', 'emailError', 'phoneError', 'serviceError', 'dateError', 'timeError']) {
       await expect(page.locator(`#${id}`)).toHaveClass(/show/);
     }
     expect(bookingRequests).toBe(0);

@@ -87,7 +87,7 @@ describe('first admin account', () => {
     test('is reset to ADMIN_INITIAL_PASSWORD at startup', async () => {
       await seedLegacyAdmin('legacy_reset');
       const { app } = await bootApp('legacy_reset', { ADMIN_INITIAL_PASSWORD: 'a-long-initial-secret' });
-      await waitFor(async () => (await login(app, 'admin', 'a-long-initial-secret')).status === 200);
+      await waitFor(async () => (await login(app, 'admin', 'a-long-initial-secret')).status === 200, { timeout: 15000, interval: 100 });
       expect((await login(app, 'admin', 'admin123')).status).toBe(401);
     });
 
@@ -214,6 +214,7 @@ describe('bookings in the database', () => {
     await seed.collection('bookings').insertMany([
       { id: 1, bookingNumber: 'MKP-01050', name: 'Old One', email: 'old1@example.com', phone: '+2348000000001', service: 'bridal', date: isoDate(30), status: 'confirmed', bookedAt: new Date() },
       { id: 2, bookingNumber: 'MKP-01007', name: 'Old Two', email: 'old2@example.com', phone: '+2348000000002', service: 'party', date: isoDate(30), status: 'confirmed', bookedAt: new Date() },
+      { id: 4, bookingNumber: `BRD-${isoDate(5).replace(/-/g, '')}-1000-07`, name: 'Slot Seven', email: 'old4@example.com', phone: '+2348000000004', service: 'bridal', date: isoDate(5), time: '10:00', status: 'confirmed', bookedAt: new Date() },
       { id: 3, bookingNumber: 'undefined', name: 'Legacy', email: 'old3@example.com', phone: '+2348000000003', service: 'casual', date: isoDate(30), status: 'confirmed', bookedAt: new Date() }
     ]);
     ({ app, mongoose, sent } = await bootApp('bookings'));
@@ -224,14 +225,34 @@ describe('bookings in the database', () => {
     expect(admin).toBeTruthy();
   });
 
-  test('the booking counter resumes after the highest stored number', async () => {
+  test('the sequence for a slot continues from what is stored in the database', async () => {
+    // The seeded data holds ...-1000-07 for this slot, so the next booking is 08
     const res = await book();
     expect(res.status).toBe(201);
-    expect(res.body.booking.bookingNumber).toBe('MKP-01051');
+    expect(res.body.booking.bookingNumber).toBe(`BRD-${isoDate(5).replace(/-/g, '')}-1000-08`);
+    expect(res.body.booking.time).toBe('10:00');
+  });
+
+  test('a restart does not repeat a number: a fresh app on the same database carries on', async () => {
+    const before = (await book({ email: 'restart1@example.com', time: '10:30' })).body.booking.bookingNumber;
+    ({ app, mongoose, sent } = await bootApp('bookings')); // "restart": new process, same database
+    await waitFor(async () => mongoose.model('Pricing').countDocuments());
+    const after = (await book({ email: 'restart2@example.com', time: '10:30' })).body.booking.bookingNumber;
+    expect(after).not.toBe(before);
+    expect(parseInt(after.slice(-2), 10)).toBe(parseInt(before.slice(-2), 10) + 1);
+    // log the admin back in on the new instance for the tests that follow
+    token = (await login(app, 'boss', PASSWORD)).body.token;
+  });
+
+  test('the stored booking keeps the appointment time and its number', async () => {
+    const created = (await book({ email: 'stored-time@example.com', time: '15:30' })).body.booking;
+    const doc = await mongoose.model('Booking').findOne({ bookingNumber: created.bookingNumber }).lean();
+    expect(doc.time).toBe('15:30');
+    expect(doc.service).toBe('bridal');
   });
 
   test('concurrent bookings all get distinct numbers', async () => {
-    const results = await Promise.all([1, 2, 3, 4, 5].map((i) => book({ email: `c${i}@example.com` })));
+    const results = await Promise.all([1, 2, 3, 4, 5].map((i) => book({ email: `c${i}@example.com`, time: '12:00' })));
     results.forEach((r) => expect(r.status).toBe(201));
     const numbers = results.map((r) => r.body.booking.bookingNumber);
     expect(new Set(numbers).size).toBe(5);
@@ -322,3 +343,85 @@ describe('bookings in the database', () => {
     expect(sent.find((m) => m.to === 'dbtemplate@example.com').subject).toBe('DB template for Db Person');
   });
 });
+
+describe('customer photos in the database', () => {
+  let app, mongoose, token, booking;
+  const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]), Buffer.from('JFIF'), Buffer.from(Array.from({ length: 400 }, (_, i) => i % 251))]);
+
+  const uploadPhoto = (bytes = JPEG, tok = booking.receiptToken) =>
+    request(app).post(`/api/bookings/${booking.bookingNumber}/photo`).set('X-Forwarded-For', uniqueIp())
+      .set('Content-Type', 'image/jpeg').query({ token: tok }).send(bytes);
+
+  beforeAll(async () => {
+    ({ app, mongoose } = await bootApp('photos'));
+    await createAdmin(mongoose, { username: 'boss', role: 'admin' });
+    token = (await login(app, 'boss', PASSWORD)).body.token;
+  });
+
+  beforeEach(async () => {
+    booking = (await request(app).post('/api/bookings').set('X-Forwarded-For', uniqueIp()).send(validBooking())).body.booking;
+  });
+
+  test('the photo is stored as binary in its own collection, not inside the booking', async () => {
+    expect((await uploadPhoto()).status).toBe(201);
+
+    const photo = await mongoose.model('BookingPhoto').findOne({ bookingNumber: booking.bookingNumber });
+    expect(photo.contentType).toBe('image/jpeg');
+    expect(photo.size).toBe(JPEG.length);
+    expect(Buffer.compare(Buffer.from(photo.data), JPEG)).toBe(0);
+
+    const stored = await mongoose.model('Booking').findOne({ bookingNumber: booking.bookingNumber }).lean();
+    expect(stored.hasPhoto).toBe(true);
+    expect(stored.photo).toBeUndefined();
+    expect(JSON.stringify(stored)).not.toContain('JFIF');
+  });
+
+  test('an admin gets exactly the bytes that were uploaded', async () => {
+    await uploadPhoto();
+    const res = await request(app).get(`/api/admin/bookings/${booking.bookingNumber}/photo`).set(bearer(token));
+    expect(res.status).toBe(200);
+    expect(Buffer.compare(res.body, JPEG)).toBe(0);
+  });
+
+  test('re-uploading replaces rather than adds', async () => {
+    await uploadPhoto();
+    const second = Buffer.concat([JPEG, Buffer.from('second')]);
+    await uploadPhoto(second);
+    expect(await mongoose.model('BookingPhoto').countDocuments({ bookingNumber: booking.bookingNumber })).toBe(1);
+    const res = await request(app).get(`/api/admin/bookings/${booking.bookingNumber}/photo`).set(bearer(token));
+    expect(Buffer.compare(res.body, second)).toBe(0);
+  });
+
+  test('photos expire automatically after 90 days (TTL index) and booking numbers are unique', async () => {
+    const indexes = await mongoose.model('BookingPhoto').collection.indexes();
+    const ttl = indexes.find((i) => i.key && i.key.createdAt === 1);
+    expect(ttl.expireAfterSeconds).toBe(90 * 24 * 60 * 60);
+    const unique = indexes.find((i) => i.key && i.key.bookingNumber === 1);
+    expect(unique.unique).toBe(true);
+  });
+
+  test('a customer can delete their photo, and the flag clears', async () => {
+    await uploadPhoto();
+    await request(app).delete(`/api/bookings/${booking.bookingNumber}/photo`).query({ token: booking.receiptToken }).expect(200);
+    expect(await mongoose.model('BookingPhoto').countDocuments({ bookingNumber: booking.bookingNumber })).toBe(0);
+    expect((await mongoose.model('Booking').findOne({ bookingNumber: booking.bookingNumber })).hasPhoto).toBe(false);
+  });
+
+  test('deleting a booking removes its photo from the database', async () => {
+    await uploadPhoto();
+    await request(app).delete(`/api/bookings/${booking.id}`).set(bearer(token)).expect(200);
+    expect(await mongoose.model('BookingPhoto').countDocuments({ bookingNumber: booking.bookingNumber })).toBe(0);
+  });
+
+  test('the wrong token stores nothing', async () => {
+    expect((await uploadPhoto(JPEG, 'f'.repeat(32))).status).toBe(403);
+    expect(await mongoose.model('BookingPhoto').countDocuments({ bookingNumber: booking.bookingNumber })).toBe(0);
+  });
+
+  test('booking lists stay light: no image bytes in the admin list', async () => {
+    await uploadPhoto();
+    const res = await request(app).get('/api/admin/bookings').set(bearer(token));
+    expect(JSON.stringify(res.body)).not.toContain('JFIF');
+  });
+});
+

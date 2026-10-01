@@ -475,6 +475,8 @@
         }
 
         /* ========== LOADING ========== */
+        .booking-photo img { display: block; max-width: 100%; max-height: 360px; margin-bottom: 12px; border-radius: 4px; }
+
         .loading { text-align: center; padding: 40px; color: var(--muted); }
         .loading i { font-size: 1.5rem; margin-bottom: 10px; animation: spin 0.9s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -717,6 +719,7 @@
                         <button class="tab active" onclick="switchTab('availability')">Availability</button>
                         <button class="tab" onclick="switchTab('pricing')">Pricing</button>
                         <button class="tab" onclick="switchTab('email-templates')">Email Templates</button>
+                        <button class="tab" onclick="switchTab('system')">System</button>
                     </div>
 
                     <div id="availability-tab" class="tab-content active">
@@ -793,6 +796,13 @@
                         </div>
                     </div>
 
+                    <div id="system-tab" class="tab-content">
+                        <h3>System status</h3>
+                        <div id="system-status" aria-live="polite">Checking…</div>
+                        <button class="btn btn-primary" id="send-test-email-btn" type="button"><i class="fas fa-envelope"></i> Send test email</button>
+                        <p id="test-email-result" role="status" style="margin-top: 14px;"></p>
+                    </div>
+
                     <div id="email-templates-tab" class="tab-content">
                         <h3>Email Templates</h3>
                         <div class="form-group">
@@ -806,6 +816,7 @@
 Booking Details:
 Booking ID: {bookingNumber}
 Date: {date}
+Time: {time}
 Service: {service}
 Phone: {phone}
 Country: {country}

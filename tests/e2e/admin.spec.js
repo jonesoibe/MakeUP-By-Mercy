@@ -171,13 +171,14 @@ test.describe('settings', () => {
     await visitor.fill('#phone', '08012345678');
     await visitor.selectOption('#service', 'casual');
     await visitor.fill('#date', isoDate(1));
+    await visitor.selectOption('#time', { index: 1 });
     await visitor.getByRole('button', { name: /book appointment/i }).click();
     await expect(visitor.locator('#dateError')).toContainText(/2 days notice/);
     await visitor.close();
 
     // ...and by the server, for anyone bypassing the form
     const direct = await request.post('/api/bookings', {
-      data: { name: 'Direct Post', email: 'direct@example.com', phone: '+2348012345678', service: 'casual', date: isoDate(1) }
+      data: { name: 'Direct Post', email: 'direct@example.com', phone: '+2348012345678', service: 'casual', date: isoDate(1), time: '10:00' }
     });
     expect(direct.status()).toBe(400);
 
@@ -202,6 +203,31 @@ test.describe('settings', () => {
 
     const res = await page.request.get('/api/email-templates/confirmation');
     expect((await res.json()).template.subject).toBe('E2E subject for {name}');
+  });
+});
+
+test.describe('system status and email check', () => {
+  test('Settings > System says where bookings are stored and which email providers are on', async ({ page }) => {
+    await adminLogin(page);
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'System', exact: true }).click();
+
+    const status = page.locator('#system-status');
+    // the test server has no database and no email provider
+    await expect(status).toContainText('Database: ✕ Not configured');
+    await expect(status).toContainText(/lost on restart/i);
+    await expect(status).toContainText('SendGrid: ✕ Not configured');
+    await expect(status).toContainText('Gmail fallback: ✕ Not configured');
+    await expect(status).toContainText(/EMAIL_PASSWORD/);
+  });
+
+  test('"Send test email" explains why when no provider is set up', async ({ page }) => {
+    await adminLogin(page);
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'System', exact: true }).click();
+    await page.getByRole('button', { name: /send test email/i }).click();
+    await expect(page.locator('#test-email-result')).toContainText(/no email provider configured/i);
+    await expect(page.getByRole('button', { name: /send test email/i })).toBeEnabled();
   });
 });
 

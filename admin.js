@@ -1,3 +1,10 @@
+// 14:00 -> '2:00 PM' (appointment times are stored as 24-hour HH:MM)
+function formatApptTime(hhmm) {
+    if (!hhmm) return '';
+    const [h, m] = String(hhmm).split(':').map(Number);
+    return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
 // Escape text before putting it into HTML. Booking fields (name, email, ...)
 // are typed by customers, so they must never be inserted as raw markup.
 function esc(value) {
@@ -60,6 +67,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (savePricingBtn) {
         savePricingBtn.addEventListener('click', savePricing);
         console.log('✅ Save Pricing button listener attached');
+    }
+
+    const testEmailBtn = document.getElementById('send-test-email-btn');
+    if (testEmailBtn) {
+        testEmailBtn.addEventListener('click', sendTestEmail);
     }
 
     const saveEmailTemplateBtn = document.getElementById('save-email-template-btn');
@@ -145,7 +157,9 @@ function switchTab(tabName) {
     event.target.classList.add('active');
 
     // Load email template when tab is opened
-    if (tabName === 'email-templates') {
+    if (tabName === 'system') {
+        loadSystemStatus();
+    } else if (tabName === 'email-templates') {
         loadEmailTemplate();
     } else if (tabName === 'manage') {
         renderManageResults(document.getElementById('search-booking').value.trim());
@@ -191,9 +205,9 @@ async function loadUpcomingAppointments() {
         if (data.appointments && data.appointments.length > 0) {
             data.appointments.forEach(apt => {
                 const dateObj = new Date(apt.date);
-                const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
                 html += `<tr>
-                    <td>${dateStr}</td>
+                    <td>${dateStr}${apt.time ? `<br><small>${esc(formatApptTime(apt.time))}</small>` : ''}</td>
                     <td>${esc(apt.name)}</td>
                     <td>${esc(apt.service.charAt(0).toUpperCase() + apt.service.slice(1))}</td>
                     <td>${esc(apt.phone)}</td>
@@ -226,13 +240,13 @@ async function loadRecentBookings() {
         if (data.bookings && data.bookings.length > 0) {
             data.bookings.forEach(booking => {
                 const dateObj = new Date(booking.date);
-                const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+                const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
                 html += `<tr>
                     <td><strong>${esc(booking.bookingNumber)}</strong></td>
                     <td>${esc(booking.name)}</td>
                     <td>${esc(booking.email)}</td>
                     <td>${esc(booking.service.charAt(0).toUpperCase() + booking.service.slice(1))}</td>
-                    <td>${dateStr}</td>
+                    <td>${dateStr}${booking.time ? `<br><small>${esc(formatApptTime(booking.time))}</small>` : ''}</td>
                     <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${esc(booking._id)}')">View</button></td>
                 </tr>`;
             });
@@ -272,14 +286,14 @@ function displayBookingsTable(bookings) {
     if (bookings && bookings.length > 0) {
         bookings.forEach(booking => {
             const dateObj = new Date(booking.date);
-            const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+            const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
             html += `<tr>
                 <td><strong>${esc(booking.bookingNumber)}</strong></td>
                 <td>${esc(booking.name)}</td>
                 <td>${esc(booking.email)}</td>
                 <td>${esc(booking.phone)}</td>
                 <td>${esc(booking.service.charAt(0).toUpperCase() + booking.service.slice(1))}</td>
-                <td>${dateStr}</td>
+                <td>${dateStr}${booking.time ? `<br><small>${esc(formatApptTime(booking.time))}</small>` : ''}</td>
                 <td><span class="status-badge status-${esc(booking.status)}">${esc(booking.status)}</span></td>
                 <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${esc(booking._id)}')">View</button></td>
             </tr>`;
@@ -315,13 +329,13 @@ function renderManageResults(query) {
     let html = '<table class="bookings-table"><thead><tr><th>Booking ID</th><th>Client</th><th>Email</th><th>Service</th><th>Date</th><th>Status</th><th>Action</th></tr></thead><tbody>';
     matches.forEach(booking => {
         const dateObj = new Date(booking.date);
-        const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        const dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
         html += `<tr>
             <td><strong>${esc(booking.bookingNumber)}</strong></td>
             <td>${esc(booking.name)}</td>
             <td>${esc(booking.email)}</td>
             <td>${esc(booking.service.charAt(0).toUpperCase() + booking.service.slice(1))}</td>
-            <td>${dateStr}</td>
+            <td>${dateStr}${booking.time ? `<br><small>${esc(formatApptTime(booking.time))}</small>` : ''}</td>
             <td><span class="status-badge status-${esc(booking.status)}">${esc(booking.status)}</span></td>
             <td><button class="btn btn-sm btn-primary" onclick="openBookingModal('${esc(booking._id)}')">View</button></td>
         </tr>`;
@@ -364,7 +378,7 @@ async function openBookingModal(bookingId) {
         currentBookingId = bookingId;
 
         const dateObj = new Date(booking.date);
-        const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const dateStr = dateObj.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 
         let html = `
             <div style="background-color: rgba(255,255,255,0.55); border: 1px solid var(--line); padding: 16px; border-radius: 4px; margin-bottom: 15px;">
@@ -382,20 +396,92 @@ async function openBookingModal(bookingId) {
                 <h4 style="margin-bottom: 10px;">Appointment Details</h4>
                 <p><strong>Service:</strong> ${esc(booking.service.charAt(0).toUpperCase() + booking.service.slice(1))}</p>
                 <p><strong>Date:</strong> ${dateStr}</p>
+                ${booking.time ? `<p><strong>Time:</strong> ${esc(formatApptTime(booking.time))}</p>` : ''}
                 <p><strong>Booked On:</strong> ${new Date(booking.bookedAt).toLocaleString()}</p>
             </div>
         `;
 
+        if (booking.hasPhoto) {
+            html += `
+            <div style="margin-bottom: 15px;">
+                <h4 style="margin-bottom: 10px;">Photo from the customer</h4>
+                <div id="booking-photo" class="booking-photo">Loading photo…</div>
+            </div>`;
+        }
+
         document.getElementById('booking-details').innerHTML = html;
         document.getElementById('booking-modal').classList.add('show');
+        if (booking.hasPhoto) loadBookingPhoto(booking.bookingNumber);
     } catch (error) {
         console.error('Error opening booking:', error);
+    }
+}
+
+// The photo is private: it is fetched with the admin token and shown from a
+// temporary in-memory URL (an <img src> can't send the Authorization header).
+let currentPhotoUrl = null;
+
+function releaseBookingPhoto() {
+    if (currentPhotoUrl) {
+        URL.revokeObjectURL(currentPhotoUrl);
+        currentPhotoUrl = null;
+    }
+}
+
+async function loadBookingPhoto(bookingNumber) {
+    const holder = document.getElementById('booking-photo');
+    if (!holder) return;
+    try {
+        const response = await fetch('/api/admin/bookings/' + encodeURIComponent(bookingNumber) + '/photo', {
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('adminToken') }
+        });
+        if (!response.ok) throw new Error('No photo');
+        const blob = await response.blob();
+
+        const stillOpen = document.getElementById('booking-photo');
+        if (!stillOpen) return; // the dialog was closed while loading
+        releaseBookingPhoto();
+        currentPhotoUrl = URL.createObjectURL(blob);
+
+        const img = document.createElement('img');
+        img.src = currentPhotoUrl;
+        img.alt = 'Photo supplied by the customer';
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-sm btn-danger';
+        remove.textContent = 'Remove photo';
+        remove.addEventListener('click', () => removeBookingPhoto(bookingNumber));
+
+        stillOpen.replaceChildren(img, remove);
+    } catch (error) {
+        holder.textContent = 'This photo is no longer available (photos are deleted automatically after 90 days).';
+    }
+}
+
+async function removeBookingPhoto(bookingNumber) {
+    if (!confirm('Remove this photo? This cannot be undone.')) return;
+    try {
+        const response = await fetch('/api/bookings/' + encodeURIComponent(bookingNumber) + '/photo', {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('adminToken') }
+        });
+        if (!response.ok) throw new Error('Delete failed');
+        releaseBookingPhoto();
+        const holder = document.getElementById('booking-photo');
+        if (holder) holder.textContent = 'Photo removed.';
+        const booking = allBookings.find(b => b.bookingNumber === bookingNumber);
+        if (booking) booking.hasPhoto = false;
+        showSuccess('Photo removed.');
+    } catch (error) {
+        showSuccess('Could not remove the photo.', true);
     }
 }
 
 function closeBookingModal() {
     document.getElementById('booking-modal').classList.remove('show');
     currentBookingId = null;
+    releaseBookingPhoto();
 }
 
 async function confirmBooking() {
@@ -499,10 +585,10 @@ function exportBookings(format) {
 }
 
 function exportToCSV() {
-    let csv = 'Booking ID,Client Name,Email,Phone,Country,Service,Date,Status\n';
+    let csv = 'Booking ID,Client Name,Email,Phone,Country,Service,Date,Time,Status\n';
     allBookings.forEach(booking => {
         const dateStr = new Date(booking.date).toLocaleDateString();
-        csv += [booking.bookingNumber, booking.name, booking.email, booking.phone, booking.country, booking.service, dateStr, booking.status].map(csvCell).join(',') + '\n';
+        csv += [booking.bookingNumber, booking.name, booking.email, booking.phone, booking.country, booking.service, dateStr, formatApptTime(booking.time), booking.status].map(csvCell).join(',') + '\n';
     });
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -736,6 +822,72 @@ async function saveEmailTemplate() {
     } catch (error) {
         console.error('Error saving email template:', error);
         showSuccess('Error saving email template!', true);
+    }
+}
+
+// Where bookings are being stored and which email providers are active
+async function loadSystemStatus() {
+    const box = document.getElementById('system-status');
+    box.textContent = 'Checking…';
+    try {
+        const response = await fetch('/api/admin/system-status', {
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('adminToken') }
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Could not load status');
+
+        const db = data.database;
+        const e = data.email;
+        const rows = [
+            ['Database', db.state === 'connected' ? 'Connected' : (db.state === 'memory' ? 'Not configured' : 'Not connected'), db.state === 'connected', db.note],
+            ['SendGrid', e.sendgrid ? 'Configured' : 'Not configured', e.sendgrid, e.sendgrid ? 'Used first for every email.' : 'Set SENDGRID_API_KEY to use it.'],
+            ['Gmail fallback', e.gmailFallback ? 'Configured' : 'Not configured', e.gmailFallback, e.gmailFallback ? 'Used if SendGrid fails.' : 'Set EMAIL_USER and EMAIL_PASSWORD (a Gmail app password) to enable it.'],
+            ['Owner notifications', e.ownerNotifications || 'No address set', !!e.ownerNotifications, 'New-booking alerts go to this address (OWNER_EMAIL).']
+        ];
+
+        box.replaceChildren(...rows.map(([label, value, ok, note]) => {
+            const row = document.createElement('div');
+            row.style.cssText = 'padding: 12px 0; border-bottom: 1px solid var(--line);';
+            const title = document.createElement('strong');
+            title.textContent = label + ': ';
+            const state = document.createElement('span');
+            state.textContent = (ok ? '✓ ' : '✕ ') + value;
+            state.style.color = ok ? 'var(--success)' : 'var(--danger)';
+            const hint = document.createElement('div');
+            hint.textContent = note;
+            hint.style.cssText = 'color: var(--muted); font-size: 0.875rem; margin-top: 2px;';
+            row.append(title, state, hint);
+            return row;
+        }));
+    } catch (error) {
+        box.textContent = 'Could not load the system status.';
+    }
+}
+
+async function sendTestEmail() {
+    const button = document.getElementById('send-test-email-btn');
+    const result = document.getElementById('test-email-result');
+    button.disabled = true;
+    result.textContent = 'Sending…';
+    result.style.color = '';
+    try {
+        const response = await fetch('/api/admin/email/test', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('adminToken') }
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+            result.textContent = `Sent to ${data.sentTo} using ${data.provider === 'gmail' ? 'the Gmail fallback' : 'SendGrid'}. Check that inbox.`;
+            result.style.color = 'var(--success)';
+        } else {
+            result.textContent = data.message || 'The test email could not be sent.';
+            result.style.color = 'var(--danger)';
+        }
+    } catch (error) {
+        result.textContent = 'The test email could not be sent.';
+        result.style.color = 'var(--danger)';
+    } finally {
+        button.disabled = false;
     }
 }
 

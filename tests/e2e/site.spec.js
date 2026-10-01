@@ -14,7 +14,8 @@ test.describe('page content and navigation', () => {
   test('every image on the page loads', async ({ page }) => {
     // Lazy images only load near the viewport, so bring each one into view
     // (instant scrolling: the page's smooth-scroll would otherwise lag behind)
-    const images = page.locator('img');
+    // (the photo-upload preview <img> has no source until a photo is chosen)
+    const images = page.locator('img[src]:not([src=""])');
     const count = await images.count();
     for (let i = 0; i < count; i += 1) {
       await images.nth(i).evaluate((img) => img.scrollIntoView({ behavior: 'instant', block: 'center' }));

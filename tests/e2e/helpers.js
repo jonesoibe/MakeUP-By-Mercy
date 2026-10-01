@@ -14,6 +14,59 @@ const test = base.test.extend({
 });
 const { expect } = base;
 
+const zlib = require('zlib');
+
+// A real, decodable PNG (flat colour) of any size - for upload tests without
+// needing image files in the repo.
+const crcTable = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buffer) {
+  let c = 0xffffffff;
+  for (const byte of buffer) c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([length, body, crc]);
+}
+
+function makePng(width, height, [r, g, b] = [200, 120, 110]) {
+  const stride = 1 + width * 3;
+  const raw = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const i = y * stride + 1 + x * 3;
+      raw[i] = (r + x) % 256;
+      raw[i + 1] = (g + y) % 256;
+      raw[i + 2] = b;
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // RGB
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', zlib.deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0))
+  ]);
+}
+
 const ADMIN_USER = 'admin';
 const ADMIN_PASSWORD = 'e2e-admin-password'; // matches playwright.config.js
 
@@ -33,6 +86,7 @@ function bookingData(overrides = {}) {
     country: 'Nigeria',
     service: 'bridal',
     date: isoDate(10),
+    time: '11:00',
     ...overrides
   };
 }
@@ -58,4 +112,4 @@ async function adminToken(request) {
   return (await res.json()).token;
 }
 
-module.exports = { test, expect, ADMIN_USER, ADMIN_PASSWORD, isoDate, bookingData, seedBooking, adminLogin, adminToken };
+module.exports = { makePng, test, expect, ADMIN_USER, ADMIN_PASSWORD, isoDate, bookingData, seedBooking, adminLogin, adminToken };

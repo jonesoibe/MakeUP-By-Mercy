@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const path = require('path');
 const crypto = require('crypto');
 const sgMail = require('@sendgrid/mail');
+const nodemailer = require('nodemailer');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
@@ -103,7 +104,9 @@ const MONGO_URI = process.env.MONGODB_URI;
 if (MONGO_URI) {
   mongoose.connect(MONGO_URI)
     .then(() => log('INFO', 'Connected to MongoDB Atlas'))
-    .catch(err => log('ERROR', 'MongoDB connection failed:', err.message));
+    .catch(err => log('ERROR', 'MongoDB connection failed - bookings will be refused until it connects:', err.message));
+  mongoose.connection.on('disconnected', () => log('ERROR', 'MongoDB disconnected'));
+  mongoose.connection.on('reconnected', () => log('INFO', 'MongoDB reconnected'));
 } else {
   log('WARN', 'MONGODB_URI not set. Using in-memory storage.');
 }
@@ -118,11 +121,15 @@ const bookingSchema = new mongoose.Schema({
   country: { type: String, default: 'Nigeria' },
   service: { type: String, required: true },
   date: { type: String, required: true },
+  time: { type: String, default: null }, // appointment time, HH:MM (older bookings have none)
   bookedAt: { type: Date, default: Date.now },
   status: { type: String, default: 'confirmed' },
   emailSent: { type: Boolean, default: false },
   ownerEmailSent: { type: Boolean, default: false },
   qrCode: { type: String, default: null },
+  // The photo itself lives in the separate bookingphotos collection (ADR 0001);
+  // this flag keeps booking lists light and tells the admin UI whether to look.
+  hasPhoto: { type: Boolean, default: false },
   // Random per-booking secret returned only to the customer who made the
   // booking. It lets them download their own receipt without an admin login.
   receiptToken: { type: String, default: null }
@@ -131,26 +138,76 @@ const bookingSchema = new mongoose.Schema({
 const Booking = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
 
 // ========== EMAIL CONFIGURATION ==========
-// SendGrid's HTTP API (port 443) instead of raw SMTP. Render's outbound
-// SMTP connection to Gmail was unreliable in production - the same
-// credentials worked fine from a local network, pointing to SMTP port
-// throttling/blocking at the hosting-platform level rather than a
-// credentials problem. HTTPS doesn't have that class of issue.
+// Two providers, tried in this order:
+//   1. SendGrid (HTTPS API). Preferred: Render's outbound SMTP connections to
+//      Gmail were unreliable in production, HTTPS doesn't have that problem.
+//   2. Gmail SMTP with an app password (EMAIL_USER + EMAIL_PASSWORD). Used when
+//      SendGrid isn't configured, or when a SendGrid send fails.
 const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || process.env.EMAIL_USER;
-if (process.env.SENDGRID_API_KEY) {
+const hasSendGrid = () => !!process.env.SENDGRID_API_KEY;
+const hasGmail = () => !!(process.env.EMAIL_USER && process.env.EMAIL_PASSWORD);
+const isEmailConfigured = () => hasSendGrid() || hasGmail();
+
+if (hasSendGrid()) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-  log('INFO', 'Email service ready (SendGrid)');
-} else {
-  log('WARN', 'SENDGRID_API_KEY not configured - emails will not be sent');
+}
+log(isEmailConfigured() ? 'INFO' : 'WARN',
+  `Email providers: SendGrid ${hasSendGrid() ? 'configured' : 'not configured'}, Gmail fallback ${hasGmail() ? 'configured' : 'not configured (set EMAIL_USER and EMAIL_PASSWORD)'}${isEmailConfigured() ? '' : ' - emails will not be sent'}`);
+
+let gmailTransport = null;
+function getGmailTransport() {
+  if (!gmailTransport) {
+    gmailTransport = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
+      // Fail within seconds rather than leave a booking waiting on a stalled connection
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000
+    });
+  }
+  return gmailTransport;
 }
 
-// Drop-in replacement for the old transporter.sendMail({ to, subject, html }).
-// Throws on failure so existing try/catch call sites keep working unchanged.
+function describeEmailError(error) {
+  const detail = error && error.response && error.response.body && error.response.body.errors && error.response.body.errors[0];
+  return (detail && detail.message) || (error && error.message) || 'unknown error';
+}
+
+// Send via the first provider that works. Resolves with the provider's name
+// ('sendgrid' or 'gmail'); throws if every configured provider fails or none is
+// configured, so existing try/catch call sites keep working unchanged.
 async function sendEmail({ to, subject, html }) {
-  if (!process.env.SENDGRID_API_KEY) {
-    throw new Error('SENDGRID_API_KEY not configured');
+  const failures = [];
+
+  if (hasSendGrid()) {
+    try {
+      await sgMail.send({ to, from: SENDGRID_FROM_EMAIL, subject, html });
+      return 'sendgrid';
+    } catch (error) {
+      failures.push(`SendGrid: ${describeEmailError(error)}`);
+      log('WARN', hasGmail() ? 'SendGrid failed, falling back to Gmail:' : 'SendGrid failed:', describeEmailError(error));
+    }
   }
-  await sgMail.send({ to, from: SENDGRID_FROM_EMAIL, subject, html });
+
+  if (hasGmail()) {
+    try {
+      await getGmailTransport().sendMail({
+        from: `"MakeUP By Mercy" <${process.env.EMAIL_USER}>`,
+        to,
+        subject,
+        html
+      });
+      return 'gmail';
+    } catch (error) {
+      failures.push(`Gmail: ${describeEmailError(error)}`);
+    }
+  }
+
+  if (failures.length === 0) {
+    throw new Error('No email provider configured (set SENDGRID_API_KEY, or EMAIL_USER and EMAIL_PASSWORD)');
+  }
+  throw new Error(failures.join(' | '));
 }
 
 // Middleware
@@ -193,7 +250,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com'],
       scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
       scriptSrcAttr: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
       connectSrc: ["'self'", 'https://smtp.gmail.com']
     }
   },
@@ -241,6 +298,10 @@ const bookingValidationSchema = Joi.object({
   phone: Joi.string().pattern(/^[0-9+\-\s()]+$/).min(10).max(20).required(),
   country: Joi.string().trim().max(50).default('Nigeria'),
   service: Joi.string().valid('bridal', 'party', 'casual').required(),
+  // Appointment start time, 24-hour HH:MM. Part of the booking number.
+  time: Joi.string().pattern(/^([01]\d|2[0-3]):[0-5]\d$/).required().messages({
+    'string.pattern.base': '"time" must be a valid time (HH:MM)'
+  }),
   // The booking form only collects a date (no time-of-day), so the client
   // sends a date-only string like "2026-09-24", which Joi/JS parse as
   // midnight UTC. Comparing that against .min('now') (the exact current
@@ -421,7 +482,7 @@ const ADMIN_URL = `${(process.env.CLIENT_URL || `http://localhost:${PORT}`).repl
 const DEFAULT_CONFIRMATION_TEMPLATE = {
   type: 'confirmation',
   subject: 'Your MakeUP By Mercy Booking Confirmed - ID: {bookingNumber}',
-  body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!'
+  body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nTime: {time}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!'
 };
 
 // Replace {placeholders} with values; unknown placeholders are left as-is.
@@ -451,8 +512,8 @@ async function getEmailTemplate(type) {
 // Function to send confirmation email to CLIENT
 async function sendConfirmationEmail(booking) {
   try {
-    if (!process.env.SENDGRID_API_KEY) {
-      log('WARN', 'Email disabled - SENDGRID_API_KEY not configured');
+    if (!isEmailConfigured()) {
+      log('WARN', 'Email disabled - no email provider configured');
       return false;
     }
 
@@ -470,7 +531,8 @@ async function sendConfirmationEmail(booking) {
       phone: booking.phone,
       country: booking.country,
       service: serviceLabel,
-      date: dateLabel
+      date: dateLabel,
+      time: formatTime12(booking.time)
     };
 
     // Subject is plain text; the body is escaped (admin-written text and the
@@ -515,8 +577,8 @@ async function sendConfirmationEmail(booking) {
       `
     };
 
-    await sendEmail(mailOptions);
-    log('SUCCESS', `Confirmation email sent to ${booking.email}`);
+    const provider = await sendEmail(mailOptions);
+    log('SUCCESS', `Confirmation email sent to ${booking.email} via ${provider}`);
 
     // Update booking in database
     if (MONGO_URI) {
@@ -533,8 +595,8 @@ async function sendConfirmationEmail(booking) {
 async function sendMercyNotification(booking) {
   try {
     // If SendGrid is not configured, skip
-    if (!process.env.SENDGRID_API_KEY) {
-      log('WARN', 'SENDGRID_API_KEY not configured - skipping admin notification');
+    if (!isEmailConfigured()) {
+      log('WARN', 'No email provider configured - skipping admin notification');
       return true;
     }
 
@@ -562,7 +624,8 @@ async function sendMercyNotification(booking) {
               <p style="margin: 10px 0;"><strong>Client Phone:</strong> ${escapeHtml(booking.phone)} (${escapeHtml(booking.country)})</p>
               <p style="margin: 10px 0;"><strong>Client Email:</strong> ${escapeHtml(booking.email)}</p>
               <p style="margin: 10px 0;"><strong>Service Type:</strong> ${escapeHtml(booking.service.charAt(0).toUpperCase() + booking.service.slice(1).replace(/([A-Z])/g, ' $1'))}</p>
-              <p style="margin: 10px 0;"><strong>Booking Date:</strong> ${new Date(booking.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              <p style="margin: 10px 0;"><strong>Booking Date:</strong> ${new Date(booking.date).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</p>
+              <p style="margin: 10px 0;"><strong>Appointment Time:</strong> ${escapeHtml(formatTime12(booking.time) || 'Not specified')}</p>
               <p style="margin: 10px 0;"><strong>Booked At:</strong> ${new Date(booking.bookedAt).toLocaleString()}</p>
             </div>
 
@@ -585,8 +648,8 @@ async function sendMercyNotification(booking) {
       `
     };
 
-    await sendEmail(mailOptions);
-    log('SUCCESS', `Booking notification sent to owner (${ownerEmail})`);
+    const provider = await sendEmail(mailOptions);
+    log('SUCCESS', `Booking notification sent to owner (${ownerEmail}) via ${provider}`);
 
     // Update booking in database
     if (MONGO_URI) {
@@ -600,7 +663,51 @@ async function sendMercyNotification(booking) {
 }
 
 // Booking number counter for sequential IDs
-let bookingCounter = 1000; // Start at 1000
+// Booking numbers read <TYPE>-<APPOINTMENT DATE>-<APPOINTMENT TIME>-<SEQ>, e.g.
+// BRD-20261015-1400-01 = Bridal, 15 Oct 2026, 2:00pm, first booking for that slot.
+// The sequence comes from the bookings already stored for that exact slot, so it
+// never depends on a counter held in server memory (which restarts at zero).
+const SERVICE_CODES = { bridal: 'BRD', party: 'PTY', casual: 'CSL' };
+
+function bookingNumberPrefix(service, date, time) {
+  const day = new Date(date).toISOString().slice(0, 10).replace(/-/g, '');
+  return `${SERVICE_CODES[service]}-${day}-${time.replace(':', '')}-`;
+}
+
+// The next number for a slot, given the numbers already taken for it
+function numberAfter(prefix, takenNumbers) {
+  const highest = takenNumbers.reduce((max, number) => Math.max(max, parseInt(number.slice(prefix.length), 10) || 0), 0);
+  return prefix + String(highest + 1).padStart(2, '0');
+}
+
+// Database mode: read what is stored for this exact slot
+async function nextBookingNumber(service, date, time) {
+  const prefix = bookingNumberPrefix(service, date, time);
+  const rows = await Booking.find({ bookingNumber: { $regex: `^${prefix}` } }, { bookingNumber: 1 }).lean();
+  return numberAfter(prefix, rows.map(b => b.bookingNumber));
+}
+
+// In-memory mode: same rule, synchronous, so it can be claimed in the same tick
+function nextBookingNumberInMemory(service, date, time) {
+  const prefix = bookingNumberPrefix(service, date, time);
+  return numberAfter(prefix, bookings.filter(b => String(b.bookingNumber).startsWith(prefix)).map(b => b.bookingNumber));
+}
+
+// Opening hours that apply to an appointment date. Before the owner has saved
+// availability settings the site's stated hours (9AM-8PM every day) apply.
+function hoursForDate(date, availability) {
+  if (!availability.configured) return { start: '09:00', end: '20:00', label: 'every day' };
+  const weekend = [0, 6].includes(new Date(date).getUTCDay());
+  return weekend
+    ? { start: availability.weekendStart, end: availability.weekendEnd, label: 'on weekends' }
+    : { start: availability.weekdayStart, end: availability.weekdayEnd, label: 'on weekdays' };
+}
+
+function formatTime12(hhmm) {
+  if (!hhmm) return '';
+  const [h, m] = String(hhmm).split(':').map(Number);
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+}
 
 // In-memory bookings database (fallback if MongoDB not connected)
 let bookings = [];
@@ -612,8 +719,8 @@ let emailTemplatesMemory = [
     _id: 'mem-confirmation',
     type: 'confirmation',
     subject: 'Your MakeUP By Mercy Booking Confirmed - ID: {bookingNumber}',
-    body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!',
-    variables: ['bookingNumber', 'date', 'service', 'phone', 'country'],
+    body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nTime: {time}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!',
+    variables: ['bookingNumber', 'date', 'time', 'service', 'phone', 'country'],
     updatedBy: 'system',
     updatedAt: new Date()
   },
@@ -693,7 +800,18 @@ app.get('/api/bookings', verifyAdminToken, async (req, res) => {
 app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchema), async (req, res) => {
   try {
     // Use validated data from middleware
-    const { name, email, phone, country, service, date } = req.validatedBody;
+    const { name, email, phone, country, service, date, time } = req.validatedBody;
+
+    // A database is configured but not connected: refuse, rather than quietly
+    // keeping the booking in server memory where it would vanish on restart
+    // (and the customer would still be told it was confirmed).
+    if (MONGO_URI && mongoose.connection.readyState !== 1) {
+      log('ERROR', 'Booking refused: database is configured but not connected');
+      return res.status(503).json({
+        success: false,
+        message: 'Booking is temporarily unavailable. Please try again in a few minutes, or contact Mercy on WhatsApp.'
+      });
+    }
 
     // Enforce the admin-set notice period (only once the owner has saved
     // availability settings). Checked before a booking number is allocated.
@@ -709,44 +827,70 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
       }
     }
 
-    // Create booking object with sequential booking number
-    bookingCounter++;
-    const bookingNumber = `MKP-${String(bookingCounter).padStart(5, '0')}`; // MKP-01001, MKP-01002, etc.
+    // The appointment must start inside opening hours
+    const hours = hoursForDate(date, availability);
+    if (time < hours.start || time >= hours.end) {
+      const message = `Appointments are available between ${formatTime12(hours.start)} and ${formatTime12(hours.end)} ${hours.label}. Please choose a time in that range.`;
+      return res.status(400).json({ success: false, message, errors: [{ field: 'time', message }] });
+    }
 
     const booking = {
       id: Date.now(),
-      bookingNumber: bookingNumber,
+      bookingNumber: null, // assigned below, from what is already stored
       name: name.trim(),
       email: email.toLowerCase().trim(),
       phone: phone.trim(),
       country: country || 'Nigeria',
       service,
       date,
+      time,
       bookedAt: new Date().toISOString(),
       status: 'confirmed',
-      receiptToken: crypto.randomBytes(16).toString('hex')
+      receiptToken: crypto.randomBytes(16).toString('hex'),
+      hasPhoto: false
     };
 
-    // Pre-generate and cache QR code for faster PDF generation
-    const qrCode = await generateQRCode(booking.bookingNumber);
-    booking.qrCode = qrCode || null;
+    // Allocate the number and save.
+    const useDb = MONGO_URI && mongoose.connection.readyState === 1;
 
-    // Save to database
-    if (MONGO_URI && mongoose.connection.readyState === 1) {
-      const newBooking = new Booking(booking);
-      await newBooking.save();
-      // Mirror Mongo's real _id back onto the response payload so the
-      // admin UI (which always reads booking._id) has a valid identifier
-      // regardless of storage backend.
-      booking._id = newBooking._id.toString();
-      log('SUCCESS', `Booking saved to MongoDB: ${booking.id}`);
+    if (useDb) {
+      // Two customers booking the same slot in the same instant can be offered
+      // the same sequence; the unique index rejects the second save, so take
+      // the next number and try again.
+      const MAX_ATTEMPTS = 10;
+      for (let attempt = 1; ; attempt += 1) {
+        booking.id = Date.now() + attempt - 1;
+        booking.bookingNumber = await nextBookingNumber(service, date, time);
+        // Pre-generate and cache the QR code for faster PDF generation
+        booking.qrCode = (await generateQRCode(booking.bookingNumber)) || null;
+        try {
+          const newBooking = new Booking(booking);
+          await newBooking.save();
+          // Mirror Mongo's real _id back onto the response payload so the
+          // admin UI (which always reads booking._id) has a valid identifier
+          // regardless of storage backend.
+          booking._id = newBooking._id.toString();
+          log('SUCCESS', `Booking saved to MongoDB: ${booking.bookingNumber}`);
+          break;
+        } catch (error) {
+          if (error.code !== 11000 || attempt >= MAX_ATTEMPTS) throw error;
+          log('WARN', `Booking number ${booking.bookingNumber} was taken at the same moment, trying the next one`);
+        }
+      }
     } else {
+      // No database (local development only): reserve the number and store the
+      // booking in the same step, so two requests can never be given the same
+      // number, then add the QR code.
+      booking.bookingNumber = nextBookingNumberInMemory(service, date, time);
+      booking.id = Date.now();
+      while (bookings.some(b => b.id === booking.id)) booking.id += 1;
       // In-memory fallback has no database-assigned _id, so mint one from
       // the numeric id. Without this, admin actions (confirm/cancel/message)
       // that look bookings up by _id can never find an in-memory booking.
       booking._id = String(booking.id);
       bookings.push(booking);
-      log('INFO', `Booking saved to memory: ${booking.id}`);
+      booking.qrCode = (await generateQRCode(booking.bookingNumber)) || null;
+      log('INFO', `Booking saved to memory: ${booking.bookingNumber}`);
     }
 
     log('INFO', `New booking: ${booking.name} | ${booking.email} | ${booking.service} | ${booking.date}`);
@@ -783,6 +927,7 @@ app.post('/api/bookings', bookingLimiter, validateRequest(bookingValidationSchem
         country: booking.country,
         service: booking.service,
         date: booking.date,
+        time: booking.time,
         bookedAt: booking.bookedAt,
         receiptToken: booking.receiptToken
       }
@@ -836,6 +981,11 @@ app.delete('/api/bookings/:id', verifyAdminToken, requireRole('admin', 'manager'
     const bookingId = parseInt(req.params.id);
     auditLog('BOOKING_DELETE', req.admin.username, { bookingId });
 
+    // Remember the booking number so its photo can be removed along with it
+    const existing = (MONGO_URI && mongoose.connection.readyState === 1)
+      ? await Booking.findOne({ id: bookingId }).select('bookingNumber')
+      : bookings.find(b => b.id === bookingId);
+
     if (MONGO_URI && mongoose.connection.readyState === 1) {
       const result = await Booking.deleteOne({ id: bookingId });
       if (result.deletedCount === 0) {
@@ -857,6 +1007,10 @@ app.delete('/api/bookings/:id', verifyAdminToken, requireRole('admin', 'manager'
       }
       bookings.splice(index, 1);
       log('INFO', `Booking deleted from memory: ${bookingId}`);
+    }
+
+    if (existing) {
+      await photoStore.delete(existing.bookingNumber).catch((error) => log('ERROR', 'Could not delete photo with booking:', error.message));
     }
 
     res.json({
@@ -955,8 +1109,8 @@ async function initializeDefaultEmailTemplates() {
           {
             type: 'confirmation',
             subject: 'Your MakeUP By Mercy Booking Confirmed - ID: {bookingNumber}',
-            body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!',
-            variables: ['bookingNumber', 'date', 'service', 'phone', 'country']
+            body: 'Thank you for booking with MakeUP By Mercy! Your appointment is confirmed.\n\nBooking Details:\nBooking ID: {bookingNumber}\nDate: {date}\nTime: {time}\nService: {service}\nPhone: {phone}\nCountry: {country}\n\nWe look forward to making you look stunning!',
+            variables: ['bookingNumber', 'date', 'time', 'service', 'phone', 'country']
           },
           {
             type: 'reminder',
@@ -1048,36 +1202,6 @@ async function initializeDefaultAdmin() {
     }
   } catch (error) {
     log('ERROR', 'Error initializing default admin:', error.message);
-  }
-}
-
-// Resume the booking number counter from the database on startup.
-// Without this, bookingCounter always restarts at 1000 after every
-// restart/deploy, which would eventually mint a bookingNumber that
-// collides with one already in the database (the schema's unique
-// constraint would then reject the save) - the same class of booking
-// ID integrity problem as the legacy "undefined" bookingNumber records.
-async function initializeBookingCounter() {
-  try {
-    if (MONGO_URI && mongoose.connection.readyState === 1) {
-      const existing = await Booking.find(
-        { bookingNumber: { $regex: /^MKP-\d+$/ } },
-        { bookingNumber: 1 }
-      );
-      let maxNumber = 0;
-      existing.forEach(b => {
-        const num = parseInt(b.bookingNumber.split('-')[1], 10);
-        if (!isNaN(num) && num > maxNumber) {
-          maxNumber = num;
-        }
-      });
-      if (maxNumber > bookingCounter) {
-        bookingCounter = maxNumber;
-        log('INFO', `Booking counter resumed from database at ${bookingCounter}`);
-      }
-    }
-  } catch (error) {
-    log('ERROR', 'Error initializing booking counter:', error.message);
   }
 }
 
@@ -1490,8 +1614,59 @@ app.get('/admin-login', (req, res) => {
 });
 
 // Health check
+function databaseState() {
+  if (!MONGO_URI) return 'memory';
+  return mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+}
+
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'Server is running' });
+  res.json({ status: 'Server is running', database: databaseState() });
+});
+
+function maskEmail(address) {
+  const [user, domain] = String(address || '').split('@');
+  return user && domain ? `${user[0]}***@${domain}` : null;
+}
+
+// What this server is actually using, so "is the database / email working?"
+// can be answered without reading logs.
+app.get('/api/admin/system-status', verifyAdminToken, (req, res) => {
+  res.json({
+    success: true,
+    database: {
+      configured: !!MONGO_URI,
+      state: databaseState(),
+      note: !MONGO_URI
+        ? 'No MONGODB_URI: bookings are kept in server memory and are lost on restart.'
+        : (mongoose.connection.readyState === 1 ? 'Bookings are stored in MongoDB.' : 'MongoDB is configured but not connected: new bookings are refused.')
+    },
+    email: {
+      sendgrid: hasSendGrid(),
+      gmailFallback: hasGmail(),
+      order: [hasSendGrid() && 'sendgrid', hasGmail() && 'gmail'].filter(Boolean),
+      ownerNotifications: maskEmail(process.env.OWNER_EMAIL || process.env.EMAIL_USER)
+    }
+  });
+});
+
+// Send a test email to the owner address and report which provider delivered it
+app.post('/api/admin/email/test', verifyAdminToken, requireRole('admin'), async (req, res) => {
+  const to = process.env.OWNER_EMAIL || process.env.EMAIL_USER;
+  if (!to) {
+    return res.status(400).json({ success: false, message: 'Set OWNER_EMAIL (or EMAIL_USER) so there is somewhere to send the test.' });
+  }
+  try {
+    const provider = await sendEmail({
+      to,
+      subject: 'MakeUP By Mercy: email test',
+      html: '<p>This is a test message from the MakeUP By Mercy admin console. If you can read it, booking emails are working.</p>'
+    });
+    auditLog('EMAIL_TEST', req.admin.username, { provider });
+    res.json({ success: true, provider, sentTo: maskEmail(to) });
+  } catch (error) {
+    log('ERROR', 'Email test failed:', error.message);
+    res.status(502).json({ success: false, message: `Email could not be sent. ${error.message}` });
+  }
 });
 
 // ========== RECEIPT GENERATION FUNCTIONS ==========
@@ -1539,6 +1714,7 @@ async function generateReceiptPDF(booking) {
         ['Country', booking.country],
         ['Service', String(booking.service).toUpperCase()],
         ['Date', new Date(booking.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })],
+        ...(booking.time ? [['Time', formatTime12(booking.time)]] : []),
         ['Status', String(booking.status).toUpperCase()],
         ['Booked On', new Date(booking.bookedAt).toLocaleString('en-US')]
       ];
@@ -1588,7 +1764,8 @@ async function generateReceiptPDF(booking) {
 
 // Validate booking ID format to prevent NoSQL injection
 function validateBookingId(id) {
-  return /^MKP-\d{5}$/.test(id);
+  // Current format (BRD-20261015-1400-01) and the older MKP-01001 format
+  return /^([A-Z]{3}-\d{8}-\d{4}-\d{2,3}|MKP-\d{5})$/.test(id);
 }
 
 // Receipt access: an admin (Bearer token) can fetch any receipt; a customer
@@ -1622,6 +1799,179 @@ async function receiptAccess(req, booking) {
   const match = crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(expected));
   return match ? 'customer' : null;
 }
+
+// ========== CUSTOMER PHOTOS (optional) ==========
+// See docs/adr/0001-customer-photo-storage.md for why photos live in MongoDB.
+const PHOTO_MAX_BYTES = 3 * 1024 * 1024;
+const PHOTO_RETENTION_SECONDS = 90 * 24 * 60 * 60; // deleted automatically after 90 days
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+const bookingPhotoSchema = new mongoose.Schema({
+  bookingNumber: { type: String, required: true, unique: true },
+  contentType: { type: String, required: true, enum: PHOTO_TYPES },
+  size: { type: Number, required: true },
+  data: { type: Buffer, required: true },
+  // `expires` makes this a TTL index: MongoDB removes the document itself
+  createdAt: { type: Date, default: Date.now, expires: PHOTO_RETENTION_SECONDS }
+});
+
+const BookingPhoto = mongoose.models.BookingPhoto || mongoose.model('BookingPhoto', bookingPhotoSchema);
+
+// The one place that knows where photos are kept. To move to object storage
+// (S3, R2, ...) implement these three functions; nothing else changes.
+const photosMemory = new Map();
+
+const photoStore = {
+  async put(bookingNumber, { contentType, data }) {
+    if (isDbConnected()) {
+      await BookingPhoto.findOneAndUpdate(
+        { bookingNumber },
+        { contentType, size: data.length, data, createdAt: new Date() },
+        { upsert: true }
+      );
+    } else {
+      photosMemory.set(bookingNumber, { contentType, data, createdAt: new Date() });
+    }
+  },
+
+  async get(bookingNumber) {
+    if (isDbConnected()) {
+      const doc = await BookingPhoto.findOne({ bookingNumber });
+      return doc ? { contentType: doc.contentType, data: Buffer.from(doc.data) } : null;
+    }
+    return photosMemory.get(bookingNumber) || null;
+  },
+
+  async delete(bookingNumber) {
+    if (isDbConnected()) {
+      await BookingPhoto.deleteOne({ bookingNumber });
+    } else {
+      photosMemory.delete(bookingNumber);
+    }
+  }
+};
+
+// What the file actually is, from its first bytes - never from the filename or
+// the Content-Type header the client sent.
+function detectImageType(buffer) {
+  if (buffer.length < 12) return null;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
+  if (buffer.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (buffer.slice(0, 4).toString('latin1') === 'RIFF' && buffer.slice(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  return null;
+}
+
+async function findBookingByNumber(bookingNumber) {
+  if (isDbConnected()) return Booking.findOne({ bookingNumber });
+  return bookings.find(b => b.bookingNumber === bookingNumber) || null;
+}
+
+async function setHasPhoto(bookingNumber, value) {
+  if (isDbConnected()) {
+    await Booking.updateOne({ bookingNumber }, { hasPhoto: value });
+  } else {
+    const booking = bookings.find(b => b.bookingNumber === bookingNumber);
+    if (booking) booking.hasPhoto = value;
+  }
+}
+
+const photoLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  message: { success: false, message: 'Too many photo uploads from this IP, please try again later.' }
+});
+
+// Who may touch a booking's photo: an admin, or the customer holding that
+// booking's receipt token. Runs before the body is read, so an unauthorised
+// caller can't make the server buffer a 3 MB upload.
+async function authorizePhotoAccess(req, res, next) {
+  try {
+    const { id } = req.params;
+    if (!validateBookingId(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
+    }
+    const booking = await findBookingByNumber(id);
+    const access = booking ? await receiptAccess(req, booking) : null;
+    if (!access) {
+      const isAdmin = !!(await getAdminFromRequest(req));
+      return res.status(isAdmin ? 404 : 403).json({ success: false, message: isAdmin ? 'Booking not found' : 'Not authorized' });
+    }
+    req.photoBooking = booking;
+    next();
+  } catch (error) {
+    log('ERROR', 'Photo authorization error:', error.message);
+    res.status(500).json({ success: false, message: 'Error checking access' });
+  }
+}
+
+// Customer (receipt token) or admin: attach or replace the photo
+app.post('/api/bookings/:id/photo',
+  photoLimiter,
+  authorizePhotoAccess,
+  express.raw({ type: PHOTO_TYPES, limit: PHOTO_MAX_BYTES }),
+  async (req, res) => {
+    try {
+      const data = req.body;
+      if (!Buffer.isBuffer(data) || data.length === 0) {
+        return res.status(415).json({ success: false, message: 'Send the photo as image/jpeg, image/png or image/webp.' });
+      }
+
+      const detected = detectImageType(data);
+      const declared = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+      if (!detected || detected !== declared) {
+        return res.status(400).json({ success: false, message: 'That file is not a valid JPEG, PNG or WebP image.' });
+      }
+
+      const bookingNumber = req.photoBooking.bookingNumber;
+      await photoStore.put(bookingNumber, { contentType: detected, data });
+      await setHasPhoto(bookingNumber, true);
+
+      log('INFO', `Photo stored for ${bookingNumber} (${data.length} bytes)`);
+      res.status(201).json({ success: true, message: 'Photo received.', size: data.length });
+    } catch (error) {
+      log('ERROR', 'Photo upload error:', error.message);
+      res.status(500).json({ success: false, message: 'Could not save the photo.' });
+    }
+  }
+);
+
+// Customer (receipt token) or admin: remove the photo
+app.delete('/api/bookings/:id/photo', authorizePhotoAccess, async (req, res) => {
+  try {
+    const bookingNumber = req.photoBooking.bookingNumber;
+    await photoStore.delete(bookingNumber);
+    await setHasPhoto(bookingNumber, false);
+    res.json({ success: true, message: 'Photo removed.' });
+  } catch (error) {
+    log('ERROR', 'Photo delete error:', error.message);
+    res.status(500).json({ success: false, message: 'Could not remove the photo.' });
+  }
+});
+
+// Admin only: view the photo. Never public, never cached, never sniffed.
+app.get('/api/admin/bookings/:id/photo', verifyAdminToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!validateBookingId(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid booking ID format' });
+    }
+    const photo = await photoStore.get(id);
+    if (!photo) {
+      return res.status(404).json({ success: false, message: 'No photo for this booking' });
+    }
+    res.set({
+      'Content-Type': photo.contentType,
+      'Content-Disposition': 'inline',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, no-store',
+      'Content-Security-Policy': "default-src 'none'; sandbox"
+    });
+    res.send(photo.data);
+  } catch (error) {
+    log('ERROR', 'Photo fetch error:', error.message);
+    res.status(500).json({ success: false, message: 'Could not load the photo.' });
+  }
+});
 
 // Download Receipt as PDF
 app.get('/api/bookings/:id/receipt/pdf', async (req, res) => {
@@ -2338,7 +2688,6 @@ mongoose.connection.once('connected', () => {
   initializeDefaultAdmin();
   initializeDefaultPricing();
   initializeDefaultEmailTemplates();
-  initializeBookingCounter();
 });
 
 // Serve index.html for root path

@@ -25,16 +25,19 @@ function uniqueIp() {
  * @param {object} options
  * @param {string} [options.mongoUri] connect to this MongoDB; omit for in-memory mode
  * @param {object} [options.env] extra env vars (use undefined to unset one)
- * @returns {{ app, sent, mongoose }} `sent` collects every email the app tries to send
+ * @returns {{ app, sent, gmailSent, sendgrid, gmail, mongoose }}
+ *   `sent` collects emails handed to SendGrid, `gmailSent` those handed to the
+ *   Gmail fallback; `sendgrid`/`gmail` are the mocks, so a test can make one fail.
  */
 function loadApp({ mongoUri = '', env = {} } = {}) {
   jest.resetModules();
 
   const sent = [];
-  jest.doMock('@sendgrid/mail', () => ({
-    setApiKey: jest.fn(),
-    send: jest.fn(async (message) => { sent.push(message); })
-  }));
+  const gmailSent = [];
+  const sendgrid = { setApiKey: jest.fn(), send: jest.fn(async (message) => { sent.push(message); }) };
+  const gmail = { sendMail: jest.fn(async (message) => { gmailSent.push(message); }) };
+  jest.doMock('@sendgrid/mail', () => sendgrid);
+  jest.doMock('nodemailer', () => ({ createTransport: jest.fn(() => gmail) }));
 
   const base = {
     NODE_ENV: 'test',
@@ -44,6 +47,9 @@ function loadApp({ mongoUri = '', env = {} } = {}) {
     SENDGRID_API_KEY: 'SG.test-key',
     SENDGRID_FROM_EMAIL: 'from@example.com',
     OWNER_EMAIL: 'owner@example.com',
+    // Gmail fallback is off unless a test turns it on (and never read from a real .env)
+    EMAIL_USER: '',
+    EMAIL_PASSWORD: '',
     TRUST_PROXY: '1',
     ADMIN_INITIAL_PASSWORD: '',
     DEV_ADMIN_PASSWORD: '',
@@ -56,7 +62,7 @@ function loadApp({ mongoUri = '', env = {} } = {}) {
   });
 
   const app = require('../../server');
-  return { app, sent, mongoose: require('mongoose') };
+  return { app, sent, gmailSent, sendgrid, gmail, mongoose: require('mongoose') };
 }
 
 // A signed admin token. `id` only needs to be a real ObjectId string when the
@@ -85,6 +91,7 @@ function validBooking(overrides = {}) {
     country: 'Nigeria',
     service: 'bridal',
     date: isoDate(5),
+    time: '10:00',
     ...overrides
   };
 }
